@@ -71,6 +71,14 @@ def _log(verbose: bool, message: str) -> None:
         print(message, file=sys.stderr)
 
 
+def _status(text: str) -> None:
+    print(f"\r\033[2K{text}", end="", flush=True)
+
+
+def _status_done() -> None:
+    print()
+
+
 def _ensure_any_command(commands: list[str]) -> None:
     if any(shutil.which(cmd) for cmd in commands):
         return
@@ -193,10 +201,11 @@ def load_model(model_name: str, compute_type: str, verbose: bool):
     _require_faster_whisper()
     from faster_whisper import WhisperModel
 
-    print(
-        "Loading local Whisper model (first run may download weights)...",
-        file=sys.stderr,
-    )
+    if verbose:
+        print(
+            "Loading local Whisper model (first run may download weights)...",
+            file=sys.stderr,
+        )
     t0 = time.perf_counter()
     model = WhisperModel(model_name, device="cpu", compute_type=compute_type)
     _log(verbose, f"Model load/init took {time.perf_counter() - t0:.2f}s")
@@ -204,7 +213,7 @@ def load_model(model_name: str, compute_type: str, verbose: bool):
 
 
 def transcribe_with_model(audio_path: Path, model, verbose: bool, show_banner: bool) -> str:
-    if show_banner:
+    if show_banner and verbose:
         print("Transcribing audio...", file=sys.stderr)
     t1 = time.perf_counter()
     segments, _info = model.transcribe(str(audio_path), vad_filter=True)
@@ -224,7 +233,7 @@ def _create_audio_path() -> tuple[Path, tempfile.TemporaryDirectory[str]]:
     return path, tmpdir
 
 
-def wait_for_enter(confirm_message: str | None = None) -> None:
+def wait_for_enter() -> None:
     """Wait for Enter key using /dev/tty so terminal wrappers don't break stdin handling."""
     try:
         with open("/dev/tty", "rb", buffering=0) as tty_file:
@@ -238,8 +247,6 @@ def wait_for_enter(confirm_message: str | None = None) -> None:
                         continue
                     ch = os.read(fd, 1)
                     if ch in (b"\n", b"\r"):
-                        if confirm_message:
-                            print(confirm_message, file=sys.stderr)
                         return
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -249,7 +256,7 @@ def wait_for_enter(confirm_message: str | None = None) -> None:
 
 
 def _wait_for_stop_key_event(stop_event: threading.Event) -> None:
-    wait_for_enter("\nStop key received. Stopping recording...\n")
+    wait_for_enter()
     stop_event.set()
 
 
@@ -263,6 +270,34 @@ def _text_delta(previous: str, current: str) -> str:
     return cur
 
 
+def copy_to_clipboard(text: str) -> bool:
+    if not text:
+        return False
+
+    commands = [
+        ["wl-copy"],
+        ["xclip", "-selection", "clipboard"],
+        ["xsel", "--clipboard", "--input"],
+    ]
+    for cmd in commands:
+        if not shutil.which(cmd[0]):
+            continue
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=text,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def main() -> int:
     args = build_parser().parse_args()
     if args.live_interval <= 0:
@@ -273,7 +308,10 @@ def main() -> int:
     model = None
     try:
         while True:
-            print("Recording... Press Enter to stop.\n", file=sys.stderr)
+            if args.live:
+                print("Recording... Press Enter to stop.\n", file=sys.stderr)
+            else:
+                _status("Recording... Press Enter to stop.")
             proc: subprocess.Popen[str] | None = None
             backend = ""
             stop_event: threading.Event | None = None
@@ -309,7 +347,7 @@ def main() -> int:
                             print(delta, flush=True)
                         last_live_text = live_text
                 else:
-                    wait_for_enter("\nStop key received. Stopping recording...\n")
+                    wait_for_enter()
             except KeyboardInterrupt:
                 print("\nExiting on Ctrl+C.", file=sys.stderr)
                 if stop_event is not None:
@@ -321,7 +359,10 @@ def main() -> int:
             finally:
                 if proc is not None:
                     stop_recording(proc, backend, args.verbose)
-                    print("Recording stopped.\n", file=sys.stderr)
+                    if args.live:
+                        print("Recording stopped.\n", file=sys.stderr)
+                    else:
+                        _status("Recording stopped.")
                 if stop_thread is not None:
                     stop_thread.join(timeout=0.1)
 
@@ -339,9 +380,23 @@ def main() -> int:
                     if text:
                         if args.live:
                             print("\nFinal transcript:")
-                        print(text)
+                            print(text)
+                        else:
+                            _status(text)
+                            _status_done()
+                        if copy_to_clipboard(text):
+                            pass
+                        else:
+                            print(
+                                "Warning: Could not copy to clipboard (need wl-copy, xclip, or xsel).",
+                                file=sys.stderr,
+                            )
                     else:
-                        print("No speech detected.")
+                        if args.live:
+                            print("No speech detected.")
+                        else:
+                            _status("No speech detected.")
+                            _status_done()
                 except AppError as exc:
                     print(f"Error: {exc}", file=sys.stderr)
                     return 1
@@ -351,12 +406,12 @@ def main() -> int:
                 shutil.copy2(audio_path, keep_path)
                 print(f"Saved audio to {keep_path}", file=sys.stderr)
 
-            print("\nPress Enter to start recording again. Press Ctrl+C to exit.\n", file=sys.stderr)
+            _status("Press Enter to start recording again. Press Ctrl+C to exit.")
             try:
                 wait_for_enter()
-                print("Starting new recording...\n", file=sys.stderr)
             except KeyboardInterrupt:
-                print("\nExiting on Ctrl+C.", file=sys.stderr)
+                _status("Exiting on Ctrl+C.")
+                _status_done()
                 return 0
     finally:
         tmpdir.cleanup()

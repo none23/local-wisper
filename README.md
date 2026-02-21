@@ -6,6 +6,7 @@ Local microphone-to-text CLI for this Linux machine (Manjaro/PipeWire).
 - Starts recording immediately when run.
 - Stops recording when you press `Enter`.
 - Runs local Whisper transcription and prints final text to stdout.
+- Copies each final transcript to clipboard.
 - Stays running and waits for `Enter` to start the next recording (`Ctrl+C` exits).
 
 ## Requirements
