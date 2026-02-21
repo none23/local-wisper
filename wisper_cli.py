@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import termios
 import tty
@@ -50,6 +51,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="store_true",
         help="Print timing/debug logs to stderr.",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Stream partial transcription while recording.",
+    )
+    parser.add_argument(
+        "--live-interval",
+        type=float,
+        default=1.0,
+        help="Seconds between live transcription refreshes (default: 1.0).",
     )
     return parser
 
@@ -177,7 +189,7 @@ def _require_faster_whisper() -> None:
         ) from exc
 
 
-def transcribe_file(audio_path: Path, model_name: str, compute_type: str, verbose: bool) -> str:
+def load_model(model_name: str, compute_type: str, verbose: bool):
     _require_faster_whisper()
     from faster_whisper import WhisperModel
 
@@ -188,13 +200,22 @@ def transcribe_file(audio_path: Path, model_name: str, compute_type: str, verbos
     t0 = time.perf_counter()
     model = WhisperModel(model_name, device="cpu", compute_type=compute_type)
     _log(verbose, f"Model load/init took {time.perf_counter() - t0:.2f}s")
+    return model
 
-    print("Transcribing audio...", file=sys.stderr)
+
+def transcribe_with_model(audio_path: Path, model, verbose: bool, show_banner: bool) -> str:
+    if show_banner:
+        print("Transcribing audio...", file=sys.stderr)
     t1 = time.perf_counter()
     segments, _info = model.transcribe(str(audio_path), vad_filter=True)
     text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
     _log(verbose, f"Transcription took {time.perf_counter() - t1:.2f}s")
     return text
+
+
+def transcribe_file(audio_path: Path, model_name: str, compute_type: str, verbose: bool) -> str:
+    model = load_model(model_name, compute_type, verbose)
+    return transcribe_with_model(audio_path, model, verbose, show_banner=True)
 
 
 def _create_audio_path() -> tuple[Path, tempfile.TemporaryDirectory[str]]:
@@ -203,7 +224,7 @@ def _create_audio_path() -> tuple[Path, tempfile.TemporaryDirectory[str]]:
     return path, tmpdir
 
 
-def wait_for_stop_key() -> None:
+def wait_for_enter(confirm_message: str | None = None) -> None:
     """Wait for Enter key using /dev/tty so terminal wrappers don't break stdin handling."""
     try:
         with open("/dev/tty", "rb", buffering=0) as tty_file:
@@ -217,7 +238,8 @@ def wait_for_stop_key() -> None:
                         continue
                     ch = os.read(fd, 1)
                     if ch in (b"\n", b"\r"):
-                        print("\nStop key received. Stopping recording...\n", file=sys.stderr)
+                        if confirm_message:
+                            print(confirm_message, file=sys.stderr)
                         return
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -226,53 +248,118 @@ def wait_for_stop_key() -> None:
         input()
 
 
+def _wait_for_stop_key_event(stop_event: threading.Event) -> None:
+    wait_for_enter("\nStop key received. Stopping recording...\n")
+    stop_event.set()
+
+
+def _text_delta(previous: str, current: str) -> str:
+    prev = previous.strip()
+    cur = current.strip()
+    if not prev:
+        return cur
+    if cur.startswith(prev):
+        return cur[len(prev) :].lstrip()
+    return cur
+
+
 def main() -> int:
     args = build_parser().parse_args()
+    if args.live_interval <= 0:
+        print("Error: --live-interval must be > 0.", file=sys.stderr)
+        return 1
 
     audio_path, tmpdir = _create_audio_path()
-    print("Recording... Press Enter to stop.\n", file=sys.stderr)
-
-    proc: subprocess.Popen[str] | None = None
-    backend = ""
+    model = None
     try:
-        proc, backend = start_recording(audio_path, args.sample_rate, args.verbose)
-        wait_for_stop_key()
-    except KeyboardInterrupt:
-        print("\nStop requested (Ctrl+C). Finalizing...", file=sys.stderr)
-    except AppError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        while True:
+            print("Recording... Press Enter to stop.\n", file=sys.stderr)
+            proc: subprocess.Popen[str] | None = None
+            backend = ""
+            stop_event: threading.Event | None = None
+            stop_thread: threading.Thread | None = None
+            last_live_text = ""
+            try:
+                if audio_path.exists():
+                    audio_path.unlink()
+                proc, backend = start_recording(audio_path, args.sample_rate, args.verbose)
+                if args.live:
+                    print("Live mode enabled. Partial transcription will stream below.\n", file=sys.stderr)
+                    stop_event = threading.Event()
+                    stop_thread = threading.Thread(
+                        target=_wait_for_stop_key_event, args=(stop_event,), daemon=True
+                    )
+                    stop_thread.start()
+
+                    if model is None:
+                        model = load_model(args.model, args.compute_type, args.verbose)
+                    while not stop_event.is_set():
+                        stop_event.wait(timeout=args.live_interval)
+                        if stop_event.is_set():
+                            break
+                        if not audio_path.exists() or audio_path.stat().st_size < 2048:
+                            continue
+                        live_text = transcribe_with_model(
+                            audio_path, model, args.verbose, show_banner=False
+                        )
+                        if not live_text or live_text == last_live_text:
+                            continue
+                        delta = _text_delta(last_live_text, live_text)
+                        if delta:
+                            print(delta, flush=True)
+                        last_live_text = live_text
+                else:
+                    wait_for_enter("\nStop key received. Stopping recording...\n")
+            except KeyboardInterrupt:
+                print("\nExiting on Ctrl+C.", file=sys.stderr)
+                if stop_event is not None:
+                    stop_event.set()
+                return 0
+            except AppError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1
+            finally:
+                if proc is not None:
+                    stop_recording(proc, backend, args.verbose)
+                    print("Recording stopped.\n", file=sys.stderr)
+                if stop_thread is not None:
+                    stop_thread.join(timeout=0.1)
+
+            if not audio_path.exists() or audio_path.stat().st_size < 2048:
+                print(
+                    "Error: Recording is empty or too short to transcribe.\n",
+                    file=sys.stderr,
+                )
+            else:
+                try:
+                    if model is None:
+                        text = transcribe_file(audio_path, args.model, args.compute_type, args.verbose)
+                    else:
+                        text = transcribe_with_model(audio_path, model, args.verbose, show_banner=True)
+                    if text:
+                        if args.live:
+                            print("\nFinal transcript:")
+                        print(text)
+                    else:
+                        print("No speech detected.")
+                except AppError as exc:
+                    print(f"Error: {exc}", file=sys.stderr)
+                    return 1
+
+            if args.keep_audio and audio_path.exists():
+                keep_path = Path.cwd() / f"wisper_recording_{int(time.time())}.wav"
+                shutil.copy2(audio_path, keep_path)
+                print(f"Saved audio to {keep_path}", file=sys.stderr)
+
+            print("\nPress Enter to start recording again. Press Ctrl+C to exit.\n", file=sys.stderr)
+            try:
+                wait_for_enter()
+                print("Starting new recording...\n", file=sys.stderr)
+            except KeyboardInterrupt:
+                print("\nExiting on Ctrl+C.", file=sys.stderr)
+                return 0
+    finally:
         tmpdir.cleanup()
-        return 1
-    finally:
-        if proc is not None:
-            stop_recording(proc, backend, args.verbose)
-            print("Recording stopped.\n", file=sys.stderr)
-
-    try:
-        if not audio_path.exists() or audio_path.stat().st_size < 2048:
-            print(
-                "Error: Recording is empty or too short to transcribe.",
-                file=sys.stderr,
-            )
-            return 2
-
-        text = transcribe_file(audio_path, args.model, args.compute_type, args.verbose)
-        if text:
-            print(text)
-        else:
-            print("No speech detected.")
-        return 0
-    except AppError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    finally:
-        if args.keep_audio:
-            keep_path = Path.cwd() / f"wisper_recording_{int(time.time())}.wav"
-            audio_path.replace(keep_path)
-            print(f"Saved audio to {keep_path}", file=sys.stderr)
-            tmpdir.cleanup()
-        else:
-            tmpdir.cleanup()
 
 
 if __name__ == "__main__":

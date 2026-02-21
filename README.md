@@ -6,6 +6,7 @@ Local microphone-to-text CLI for this Linux machine (Manjaro/PipeWire).
 - Starts recording immediately when run.
 - Stops recording when you press `Enter`.
 - Runs local Whisper transcription and prints final text to stdout.
+- Stays running and waits for `Enter` to start the next recording (`Ctrl+C` exits).
 
 ## Requirements
 - Python 3.13+
@@ -25,14 +26,17 @@ python wisper_cli.py
 ```
 
 Speak, then press `Enter` in the terminal to stop and print transcript.
+After each transcript, press `Enter` again to start a new recording.
 
 ## Useful flags
 ```bash
 python wisper_cli.py --model small.en --compute-type int8 --verbose
 python wisper_cli.py --keep-audio
 python wisper_cli.py --model base.en
+python wisper_cli.py --live --live-interval 0.8
 ```
 
 ## Notes
 - First run may download model weights, then runs local from cache.
 - Default model is `small.en` for strong CPU quality/speed balance.
+- `--live` streams partial text while you speak and prints a final transcript at the end.
