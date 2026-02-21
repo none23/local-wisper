@@ -1,6 +1,6 @@
 # wisper CLI
 
-Local microphone-to-text CLI for this Linux machine (Manjaro/PipeWire).
+Local microphone-to-text CLI for my Linux machine (Arch/PipeWire). Vibe-coded in a few minutes.
 
 ## What it does
 - Starts recording immediately when run.
