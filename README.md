@@ -29,6 +29,13 @@ python wisper_cli.py
 Speak, then press `Enter` in the terminal to stop and print transcript.
 After each transcript, press `Enter` again to start a new recording.
 
+## Install `lw` command (Linux)
+```bash
+./install.sh
+```
+
+This writes `~/.local/bin/lw`, so you can run `lw` directly without activating the virtualenv.
+
 ## Useful flags
 ```bash
 python wisper_cli.py --model small.en --compute-type int8 --verbose
