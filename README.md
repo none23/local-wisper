@@ -1,64 +1,54 @@
-# wisper CLI
+# lw.nvim
 
-Local microphone-to-text CLI for my Linux machine (Arch/PipeWire). Vibe-coded in a few minutes.
+Local speech-to-text Neovim plugin.
 
-## What it does
-- Starts recording immediately when run.
-- Stops recording when you press `Enter`.
-- Runs local Whisper transcription and prints final text to stdout.
-- Copies each final transcript to clipboard.
-- Stays running and waits for `Enter` to start the next recording (`Ctrl+C` exits).
+In normal mode, run `:LW` (or map it) to:
+- start recording (`recording (press Enter to stop)`)
+- stop on `Enter`
+- transcribe locally with Whisper
+- insert transcript below the cursor
 
 ## Requirements
-- Python 3.13+
-- `pw-record` (preferred) or `ffmpeg` with Pulse input support
+- Linux with `pw-record` (PipeWire)
+- Python with this repo dependencies installed (`faster-whisper`)
 
 ## Install
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+
+### lazy.nvim
+```lua
+{
+  "none23/local-wisper",
+  config = function()
+    require("lw").setup({
+      python_bin = "/home/n/none23/local-wisper/.venv/bin/python",
+      model = "small.en",
+      compute_type = "int8",
+      sample_rate = 16000,
+      -- Optional: full custom recorder command (audio path is appended)
+      -- recorder_cmd = { "pw-record", "--rate", "16000", "--channels", "1", "--format", "s16" },
+    })
+
+    vim.keymap.set("n", "<leader>lw", "<cmd>LW<CR>", { desc = "Local Whisper" })
+  end,
+}
 ```
 
-## Run
-```bash
-python wisper_cli.py
-```
+## Setup options
+- `python_bin` (string|nil): Python executable for transcription. If unset, plugin tries repo `.venv/bin/python` then `python3`.
+- `model` (string): Whisper model name/path. Default: `small.en`.
+- `compute_type` (string): faster-whisper compute type. Default: `int8`.
+- `sample_rate` (number): recording sample rate. Default: `16000`.
+- `recorder_cmd` (string[]|nil): custom recording command prefix. Plugin appends output wav path.
 
-Speak, then press `Enter` in the terminal to stop and print transcript.
-After each transcript, press `Enter` again to start a new recording.
+## Usage
+- `:LW`: toggle recording/transcription flow.
+- while recording, press `Enter` to stop and insert transcript.
 
-## Install `lw` command (Linux)
-```bash
-./install.sh
-```
+## Troubleshooting
+- `Missing dependency 'faster-whisper'`:
+  - install dependencies into the Python used by `python_bin`
+- `failed to start recorder`:
+  - install `pw-record` or set `recorder_cmd`
 
-This writes `~/.local/bin/lw`, so you can run `lw` directly without activating the virtualenv.
-
-## Useful flags
-```bash
-python wisper_cli.py --model small.en --compute-type int8 --verbose
-python wisper_cli.py --keep-audio
-python wisper_cli.py --model base.en
-python wisper_cli.py --live --live-interval 0.8
-```
-
-## Notes
-- First run may download model weights, then runs local from cache.
-- Default model is `small.en` for strong CPU quality/speed balance.
-- `--live` streams partial text while you speak and prints a final transcript at the end.
-
-## Neovim plugin (`:LW`)
-- Added local plugin files in this repo:
-  - `plugin/lw.lua`
-  - `lua/lw/init.lua`
-  - `scripts/transcribe_file.py`
-- Behavior:
-  - Run `:LW` in normal mode to start recording.
-  - Neovim echoes `recording (press Enter to stop)`.
-  - Press `Enter` to stop recording, transcribe, and insert text below cursor.
-- Requirements:
-  - `pw-record`
-  - `python3` with this project's dependencies installed (`faster-whisper`, etc.)
-- Install into Neovim by adding this repo to your `runtimepath` (or your plugin manager).
+## Development
+This repo still includes a standalone CLI (`wisper_cli.py`) and helper script (`scripts/transcribe_file.py`) used by the plugin.

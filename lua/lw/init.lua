@@ -2,6 +2,10 @@ local M = {}
 
 M.config = {
   python_bin = nil,
+  model = "small.en",
+  compute_type = "int8",
+  sample_rate = 16000,
+  recorder_cmd = nil,
 }
 
 local state = {
@@ -9,6 +13,7 @@ local state = {
   audio_path = nil,
   record_job = nil,
   stop_map_set = false,
+  stop_bufnr = nil,
   transcribe_done = false,
 }
 
@@ -24,8 +29,11 @@ local function clear_stop_mapping()
   if not state.stop_map_set then
     return
   end
-  pcall(vim.keymap.del, "n", "<CR>")
+  if state.stop_bufnr and vim.api.nvim_buf_is_valid(state.stop_bufnr) then
+    pcall(vim.keymap.del, "n", "<CR>", { buffer = state.stop_bufnr })
+  end
   state.stop_map_set = false
+  state.stop_bufnr = nil
 end
 
 local function add_text_below_cursor(text)
@@ -39,22 +47,32 @@ local function transcribe_and_insert()
     status("LW: could not find scripts/transcribe_file.py", "ErrorMsg")
     return
   end
+
   local repo_root = vim.fn.fnamemodify(script, ":h:h")
   local venv_python = repo_root .. "/.venv/bin/python"
   local python_bin = M.config.python_bin
   if python_bin == nil or python_bin == "" then
     python_bin = vim.fn.executable(venv_python) == 1 and venv_python or "python3"
   end
-  local stderr_lines = {}
 
+  if vim.fn.executable(python_bin) ~= 1 then
+    status("LW: python binary not executable: " .. python_bin, "ErrorMsg")
+    return
+  end
+
+  local stderr_lines = {}
   local python_cmd = {
     python_bin,
     script,
     state.audio_path,
+    "--model",
+    M.config.model,
+    "--compute-type",
+    M.config.compute_type,
   }
-  state.transcribe_done = false
 
-  vim.fn.jobstart(python_cmd, {
+  state.transcribe_done = false
+  local transcribe_job = vim.fn.jobstart(python_cmd, {
     stdout_buffered = true,
     stderr_buffered = true,
     on_exit = function(_, code, _)
@@ -102,12 +120,13 @@ local function transcribe_and_insert()
       local msg = table.concat(data, "\n"):gsub("%s+$", "")
       if msg ~= "" then
         table.insert(stderr_lines, msg)
-        vim.schedule(function()
-          status("LW error: " .. msg, "ErrorMsg")
-        end)
       end
     end,
   })
+
+  if transcribe_job <= 0 then
+    status("LW: failed to start transcription process", "ErrorMsg")
+  end
 end
 
 function M.stop()
@@ -131,10 +150,32 @@ local function set_stop_mapping()
   if state.stop_map_set then
     return
   end
+
+  local bufnr = vim.api.nvim_get_current_buf()
+  state.stop_bufnr = bufnr
   vim.keymap.set("n", "<CR>", function()
     M.stop()
-  end, { silent = true, nowait = true, desc = "LW stop recording" })
+  end, { buffer = bufnr, silent = true, nowait = true, desc = "LW stop recording" })
   state.stop_map_set = true
+end
+
+local function build_record_cmd(audio_path)
+  if type(M.config.recorder_cmd) == "table" and #M.config.recorder_cmd > 0 then
+    local cmd = vim.deepcopy(M.config.recorder_cmd)
+    table.insert(cmd, audio_path)
+    return cmd
+  end
+
+  return {
+    "pw-record",
+    "--rate",
+    tostring(M.config.sample_rate),
+    "--channels",
+    "1",
+    "--format",
+    "s16",
+    audio_path,
+  }
 end
 
 function M.start()
@@ -144,16 +185,7 @@ function M.start()
   end
 
   state.audio_path = vim.fn.tempname() .. ".wav"
-  local cmd = {
-    "pw-record",
-    "--rate",
-    "16000",
-    "--channels",
-    "1",
-    "--format",
-    "s16",
-    state.audio_path,
-  }
+  local cmd = build_record_cmd(state.audio_path)
 
   state.record_job = vim.fn.jobstart(cmd, {
     detach = false,
@@ -169,7 +201,7 @@ function M.start()
   })
 
   if state.record_job <= 0 then
-    status("LW: failed to start recorder (need pw-record)", "ErrorMsg")
+    status("LW: failed to start recorder (need pw-record or configured recorder_cmd)", "ErrorMsg")
     return
   end
 
