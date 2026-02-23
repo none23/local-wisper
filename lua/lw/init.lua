@@ -2,6 +2,8 @@ local M = {}
 
 M.config = {
   python_bin = nil,
+  venv_dir = nil,
+  auto_install_deps = true,
   model = "small.en",
   compute_type = "int8",
   sample_rate = 16000,
@@ -15,6 +17,8 @@ local state = {
   stop_map_set = false,
   stop_bufnr = nil,
   transcribe_done = false,
+  bootstrap_running = false,
+  resolved_python = nil,
 }
 
 function M.setup(opts)
@@ -23,6 +27,130 @@ end
 
 local function status(text, hl)
   vim.api.nvim_echo({ { text, hl or "None" } }, false, {})
+end
+
+local function script_and_repo_root()
+  local script = vim.api.nvim_get_runtime_file("scripts/transcribe_file.py", false)[1]
+  if not script or script == "" then
+    return nil, nil
+  end
+  local repo_root = vim.fn.fnamemodify(script, ":h:h")
+  return script, repo_root
+end
+
+local function default_venv_dir()
+  return M.config.venv_dir or (vim.fn.stdpath("data") .. "/lw.nvim/.venv")
+end
+
+local function default_venv_python()
+  return default_venv_dir() .. "/bin/python"
+end
+
+local function resolve_python_bin()
+  if M.config.python_bin and M.config.python_bin ~= "" then
+    return M.config.python_bin
+  end
+  if state.resolved_python and state.resolved_python ~= "" then
+    return state.resolved_python
+  end
+
+  local venv_python = default_venv_python()
+  if vim.fn.executable(venv_python) == 1 then
+    state.resolved_python = venv_python
+    return venv_python
+  end
+
+  local _, repo_root = script_and_repo_root()
+  if repo_root then
+    local repo_venv = repo_root .. "/.venv/bin/python"
+    if vim.fn.executable(repo_venv) == 1 then
+      state.resolved_python = repo_venv
+      return repo_venv
+    end
+  end
+
+  return venv_python
+end
+
+function M.install_deps(cb)
+  if state.bootstrap_running then
+    status("LW: dependency install already running", "WarningMsg")
+    return
+  end
+
+  local _, repo_root = script_and_repo_root()
+  if not repo_root then
+    status("LW: could not find plugin files", "ErrorMsg")
+    return
+  end
+
+  local req = repo_root .. "/requirements.txt"
+  if vim.fn.filereadable(req) ~= 1 then
+    status("LW: requirements.txt not found", "ErrorMsg")
+    return
+  end
+
+  local venv_dir = default_venv_dir()
+  local venv_python = default_venv_python()
+  vim.fn.mkdir(vim.fn.fnamemodify(venv_dir, ":h"), "p")
+
+  local cmd = "python3 -m venv "
+    .. vim.fn.shellescape(venv_dir)
+    .. " && "
+    .. vim.fn.shellescape(venv_python)
+    .. " -m pip install -U pip && "
+    .. vim.fn.shellescape(venv_python)
+    .. " -m pip install -r "
+    .. vim.fn.shellescape(req)
+
+  state.bootstrap_running = true
+  vim.notify("lw.nvim: installing Python dependencies...", vim.log.levels.INFO)
+
+  local job = vim.fn.jobstart({ "sh", "-c", cmd }, {
+    on_exit = function(_, code, _)
+      state.bootstrap_running = false
+      vim.schedule(function()
+        if code == 0 then
+          state.resolved_python = venv_python
+          vim.notify("lw.nvim: dependencies installed", vim.log.levels.INFO)
+          if cb then
+            cb(true)
+          end
+        else
+          vim.notify("lw.nvim: dependency install failed (exit " .. code .. ")", vim.log.levels.ERROR)
+          if cb then
+            cb(false)
+          end
+        end
+      end)
+    end,
+  })
+
+  if job <= 0 then
+    state.bootstrap_running = false
+    status("LW: failed to start dependency install", "ErrorMsg")
+  end
+end
+
+local function ensure_python_ready()
+  local py = resolve_python_bin()
+  if vim.fn.executable(py) == 1 then
+    return true
+  end
+
+  if M.config.python_bin and M.config.python_bin ~= "" then
+    status("LW: python binary not executable: " .. py, "ErrorMsg")
+    return false
+  end
+
+  if M.config.auto_install_deps then
+    M.install_deps()
+    status("LW: installing dependencies, run :LW again when done", "WarningMsg")
+    return false
+  end
+
+  status("LW: missing Python deps. Run :LWInstallDeps", "ErrorMsg")
+  return false
 end
 
 local function clear_stop_mapping()
@@ -42,19 +170,13 @@ local function add_text_below_cursor(text)
 end
 
 local function transcribe_and_insert()
-  local script = vim.api.nvim_get_runtime_file("scripts/transcribe_file.py", false)[1]
-  if not script or script == "" then
+  local script = script_and_repo_root()
+  if not script then
     status("LW: could not find scripts/transcribe_file.py", "ErrorMsg")
     return
   end
 
-  local repo_root = vim.fn.fnamemodify(script, ":h:h")
-  local venv_python = repo_root .. "/.venv/bin/python"
-  local python_bin = M.config.python_bin
-  if python_bin == nil or python_bin == "" then
-    python_bin = vim.fn.executable(venv_python) == 1 and venv_python or "python3"
-  end
-
+  local python_bin = resolve_python_bin()
   if vim.fn.executable(python_bin) ~= 1 then
     status("LW: python binary not executable: " .. python_bin, "ErrorMsg")
     return
@@ -181,6 +303,10 @@ end
 function M.start()
   if state.recording then
     status("LW: already recording (press Enter to stop)", "WarningMsg")
+    return
+  end
+
+  if not ensure_python_ready() then
     return
   end
 

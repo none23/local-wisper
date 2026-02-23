@@ -10,7 +10,7 @@ In normal mode, run `:LW` (or map it) to:
 
 ## Requirements
 - Linux with `pw-record` (PipeWire)
-- Python with this repo dependencies installed (`faster-whisper`)
+- `python3` available on PATH (only needed for first-time dependency bootstrap)
 
 ## Install
 
@@ -20,12 +20,9 @@ In normal mode, run `:LW` (or map it) to:
   "none23/local-wisper",
   config = function()
     require("lw").setup({
-      python_bin = "/home/n/none23/local-wisper/.venv/bin/python",
       model = "small.en",
       compute_type = "int8",
       sample_rate = 16000,
-      -- Optional: full custom recorder command (audio path is appended)
-      -- recorder_cmd = { "pw-record", "--rate", "16000", "--channels", "1", "--format", "s16" },
     })
 
     vim.keymap.set("n", "<leader>lw", "<cmd>LW<CR>", { desc = "Local Whisper" })
@@ -33,8 +30,19 @@ In normal mode, run `:LW` (or map it) to:
 }
 ```
 
+## First run behavior
+- If dependencies are missing, `:LW` automatically creates a plugin venv in:
+  - `stdpath("data") .. "/lw.nvim/.venv"`
+- Then it installs `requirements.txt` into that venv.
+- After install completes, run `:LW` again.
+
+You can also trigger install manually:
+- `:LWInstallDeps`
+
 ## Setup options
-- `python_bin` (string|nil): Python executable for transcription. If unset, plugin tries repo `.venv/bin/python` then `python3`.
+- `python_bin` (string|nil): explicit Python executable for transcription. If set, auto-bootstrap is skipped.
+- `venv_dir` (string|nil): target venv dir for auto-bootstrap. Default: `stdpath("data") .. "/lw.nvim/.venv"`.
+- `auto_install_deps` (boolean): auto-install missing dependencies on `:LW`. Default: `true`.
 - `model` (string): Whisper model name/path. Default: `small.en`.
 - `compute_type` (string): faster-whisper compute type. Default: `int8`.
 - `sample_rate` (number): recording sample rate. Default: `16000`.
@@ -45,10 +53,11 @@ In normal mode, run `:LW` (or map it) to:
 - while recording, press `Enter` to stop and insert transcript.
 
 ## Troubleshooting
-- `Missing dependency 'faster-whisper'`:
-  - install dependencies into the Python used by `python_bin`
 - `failed to start recorder`:
   - install `pw-record` or set `recorder_cmd`
+- dependency install fails:
+  - make sure `python3` is installed
+  - check `:messages` and rerun `:LWInstallDeps`
 
 ## Development
-This repo still includes a standalone CLI (`wisper_cli.py`) and helper script (`scripts/transcribe_file.py`) used by the plugin.
+This repo includes a standalone CLI (`wisper_cli.py`) and helper script (`scripts/transcribe_file.py`) used by the plugin.
