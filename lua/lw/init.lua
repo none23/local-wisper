@@ -1,5 +1,9 @@
 local M = {}
 
+M.config = {
+  python_bin = nil,
+}
+
 local state = {
   recording = false,
   audio_path = nil,
@@ -7,6 +11,10 @@ local state = {
   stop_map_set = false,
   transcribe_done = false,
 }
+
+function M.setup(opts)
+  M.config = vim.tbl_extend("force", M.config, opts or {})
+end
 
 local function status(text, hl)
   vim.api.nvim_echo({ { text, hl or "None" } }, false, {})
@@ -33,7 +41,10 @@ local function transcribe_and_insert()
   end
   local repo_root = vim.fn.fnamemodify(script, ":h:h")
   local venv_python = repo_root .. "/.venv/bin/python"
-  local python_bin = vim.fn.executable(venv_python) == 1 and venv_python or "python3"
+  local python_bin = M.config.python_bin
+  if python_bin == nil or python_bin == "" then
+    python_bin = vim.fn.executable(venv_python) == 1 and venv_python or "python3"
+  end
   local stderr_lines = {}
 
   local python_cmd = {
