@@ -48,3 +48,17 @@ python wisper_cli.py --live --live-interval 0.8
 - First run may download model weights, then runs local from cache.
 - Default model is `small.en` for strong CPU quality/speed balance.
 - `--live` streams partial text while you speak and prints a final transcript at the end.
+
+## Neovim plugin (`:LW`)
+- Added local plugin files in this repo:
+  - `plugin/lw.lua`
+  - `lua/lw/init.lua`
+  - `scripts/transcribe_file.py`
+- Behavior:
+  - Run `:LW` in normal mode to start recording.
+  - Neovim echoes `recording (press Enter to stop)`.
+  - Press `Enter` to stop recording, transcribe, and insert text below cursor.
+- Requirements:
+  - `pw-record`
+  - `python3` with this project's dependencies installed (`faster-whisper`, etc.)
+- Install into Neovim by adding this repo to your `runtimepath` (or your plugin manager).
