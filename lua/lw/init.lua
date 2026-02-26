@@ -10,6 +10,7 @@ M.config = {
   vad_filter = true,
   sample_rate = 16000,
   recorder_cmd = nil,
+  preload_on_setup = true,
 }
 
 local state = {
@@ -20,23 +21,23 @@ local state = {
   stop_bufnr = nil,
   bootstrap_running = false,
   resolved_python = nil,
-  worker_job = nil,
-  worker_ready = false,
-  worker_busy = false,
-  worker_config_key = nil,
-  worker_stderr_lines = {},
-  worker_request_id = 0,
+  daemon_config_key = nil,
+  daemon_socket_path = nil,
+  daemon_last_start_ms = 0,
+  request_busy = false,
+  request_id = 0,
   pending_request_id = nil,
-  queued_audio_path = nil,
-  cleanup_autocmd_set = false,
+  request_channel = nil,
 }
 
 local function status(text, hl)
   vim.api.nvim_echo({ { text, hl or "None" } }, false, {})
 end
 
-local function worker_script_and_repo_root()
-  local script = vim.api.nvim_get_runtime_file("scripts/transcribe_worker.py", false)[1]
+local ensure_daemon
+
+local function daemon_script_and_repo_root()
+  local script = vim.api.nvim_get_runtime_file("scripts/transcribe_daemon.py", false)[1]
   if not script or script == "" then
     return nil, nil
   end
@@ -66,7 +67,7 @@ local function resolve_python_bin()
     return venv_python
   end
 
-  local _, repo_root = worker_script_and_repo_root()
+  local _, repo_root = daemon_script_and_repo_root()
   if repo_root then
     local repo_venv = repo_root .. "/.venv/bin/python"
     if vim.fn.executable(repo_venv) == 1 then
@@ -78,8 +79,26 @@ local function resolve_python_bin()
   return venv_python
 end
 
-local function worker_config_key()
+local function daemon_config_key()
   return table.concat({ M.config.model, M.config.compute_type, M.config.device, tostring(M.config.vad_filter) }, "|")
+end
+
+local function short_hash(text)
+  local ok, digest = pcall(vim.fn.sha256, text)
+  if ok and type(digest) == "string" and #digest >= 12 then
+    return string.sub(digest, 1, 12)
+  end
+  return "default"
+end
+
+local function daemon_socket_path_for_key(key)
+  local base = vim.fn.stdpath("cache") .. "/lw.nvim"
+  local ok = pcall(vim.fn.mkdir, base, "p")
+  if not ok then
+    base = "/tmp/lw.nvim"
+    pcall(vim.fn.mkdir, base, "p")
+  end
+  return base .. "/daemon-" .. short_hash(key) .. ".sock"
 end
 
 local function add_text_below_cursor(text)
@@ -87,34 +106,29 @@ local function add_text_below_cursor(text)
   vim.api.nvim_buf_set_lines(0, row, row, false, vim.split(text, "\n", { plain = true }))
 end
 
-local function clear_worker_state()
-  state.worker_job = nil
-  state.worker_ready = false
-  state.worker_busy = false
-  state.worker_config_key = nil
-  state.worker_stderr_lines = {}
-  state.pending_request_id = nil
+local function close_request_channel()
+  if state.request_channel and state.request_channel > 0 then
+    pcall(vim.fn.chanclose, state.request_channel)
+  end
+  state.request_channel = nil
 end
 
-local function stop_worker()
-  if state.worker_job and state.worker_job > 0 then
-    pcall(vim.fn.jobstop, state.worker_job)
-  end
-  clear_worker_state()
+local function clear_request_state()
+  close_request_channel()
+  state.request_busy = false
+  state.pending_request_id = nil
 end
 
 function M.setup(opts)
   M.config = vim.tbl_extend("force", M.config, opts or {})
 
-  if not state.cleanup_autocmd_set then
-    local augroup = vim.api.nvim_create_augroup("lw_nvim_cleanup", { clear = true })
-    vim.api.nvim_create_autocmd("VimLeavePre", {
-      group = augroup,
-      callback = function()
-        stop_worker()
-      end,
-    })
-    state.cleanup_autocmd_set = true
+  if M.config.preload_on_setup then
+    vim.schedule(function()
+      local python_bin = resolve_python_bin()
+      if vim.fn.executable(python_bin) == 1 then
+        ensure_daemon()
+      end
+    end)
   end
 end
 
@@ -124,7 +138,7 @@ function M.install_deps(cb)
     return
   end
 
-  local _, repo_root = worker_script_and_repo_root()
+  local _, repo_root = daemon_script_and_repo_root()
   if not repo_root then
     status("LW: could not find plugin files", "ErrorMsg")
     return
@@ -210,53 +224,90 @@ local function clear_stop_mapping()
   state.stop_bufnr = nil
 end
 
-local function send_worker_request(audio_path)
-  if not state.worker_job or state.worker_job <= 0 then
-    status("LW: transcription worker is not running", "ErrorMsg")
+local function start_daemon()
+  local script = daemon_script_and_repo_root()
+  if not script then
+    status("LW: could not find scripts/transcribe_daemon.py", "ErrorMsg")
     return false
   end
-  if not state.worker_ready then
-    state.queued_audio_path = audio_path
-    status("LW: loading model...", "ModeMsg")
+
+  local python_bin = resolve_python_bin()
+  if vim.fn.executable(python_bin) ~= 1 then
+    status("LW: python binary not executable: " .. python_bin, "ErrorMsg")
+    return false
+  end
+
+  local key = daemon_config_key()
+  if state.daemon_config_key ~= key then
+    state.daemon_config_key = key
+    state.daemon_socket_path = daemon_socket_path_for_key(key)
+  end
+  local now_ms = vim.loop.hrtime() / 1000000
+  if now_ms - state.daemon_last_start_ms < 1000 then
     return true
   end
-  if state.worker_busy then
-    status("LW: transcription already running", "WarningMsg")
+
+  local cmd = {
+    python_bin,
+    script,
+    "--model",
+    M.config.model,
+    "--compute-type",
+    M.config.compute_type,
+    "--device",
+    M.config.device,
+    "--socket",
+    state.daemon_socket_path,
+  }
+  if M.config.vad_filter then
+    table.insert(cmd, "--vad-filter")
+  else
+    table.insert(cmd, "--no-vad-filter")
+  end
+
+  local job = vim.fn.jobstart(cmd, { detach = true })
+  if job <= 0 then
+    status("LW: failed to start transcription daemon", "ErrorMsg")
     return false
   end
 
-  state.worker_request_id = state.worker_request_id + 1
-  state.pending_request_id = state.worker_request_id
-  state.worker_busy = true
-
-  local payload = vim.json.encode({
-    id = state.pending_request_id,
-    audio_path = audio_path,
-  })
-  vim.fn.chansend(state.worker_job, payload .. "\n")
+  state.daemon_last_start_ms = now_ms
   return true
 end
 
-local function handle_worker_message(line)
+local function daemon_reachable()
+  if not state.daemon_socket_path or state.daemon_socket_path == "" then
+    return false
+  end
+
+  local ok, chan = pcall(vim.fn.sockconnect, "pipe", state.daemon_socket_path, { rpc = false })
+  if not ok then
+    return false
+  end
+  if chan <= 0 then
+    return false
+  end
+  pcall(vim.fn.chanclose, chan)
+  return true
+end
+
+ensure_daemon = function()
+  local key = daemon_config_key()
+  if state.daemon_config_key ~= key or not state.daemon_socket_path then
+    state.daemon_config_key = key
+    state.daemon_socket_path = daemon_socket_path_for_key(key)
+  end
+
+  if daemon_reachable() then
+    return true
+  end
+
+  return start_daemon()
+end
+
+local function handle_daemon_message(line)
   local ok, msg = pcall(vim.json.decode, line)
   if not ok or type(msg) ~= "table" then
-    return
-  end
-
-  if msg.type == "ready" then
-    state.worker_ready = true
-    if state.queued_audio_path then
-      local queued = state.queued_audio_path
-      state.queued_audio_path = nil
-      send_worker_request(queued)
-    end
-    return
-  end
-
-  if msg.type == "fatal" then
-    local detail = msg.error or "unknown error"
-    status("LW: worker failed: " .. detail, "ErrorMsg")
-    stop_worker()
     return
   end
 
@@ -264,8 +315,7 @@ local function handle_worker_message(line)
     return
   end
 
-  state.worker_busy = false
-  state.pending_request_id = nil
+  clear_request_state()
 
   if msg.type == "result" and type(msg.text) == "string" and msg.text ~= "" then
     add_text_below_cursor(msg.text)
@@ -281,105 +331,94 @@ local function handle_worker_message(line)
   if msg.type == "error" then
     local detail = msg.error or "unknown error"
     status("LW: transcription failed: " .. detail, "ErrorMsg")
+    return
   end
+
+  status("LW: unexpected daemon response", "ErrorMsg")
 end
 
-local function ensure_worker()
-  local script = worker_script_and_repo_root()
-  if not script then
-    status("LW: could not find scripts/transcribe_worker.py", "ErrorMsg")
+local function send_transcribe_request(audio_path, attempt)
+  if state.request_busy then
+    status("LW: transcription already running", "WarningMsg")
     return false
   end
 
-  local python_bin = resolve_python_bin()
-  if vim.fn.executable(python_bin) ~= 1 then
-    status("LW: python binary not executable: " .. python_bin, "ErrorMsg")
+  attempt = attempt or 0
+  if not ensure_daemon() then
     return false
   end
 
-  local key = worker_config_key()
-  if state.worker_job and state.worker_job > 0 and state.worker_config_key == key then
+  if not daemon_reachable() then
+    if attempt == 0 then
+      status("LW: loading model...", "ModeMsg")
+    end
+    if attempt >= 40 then
+      status("LW: daemon did not become ready", "ErrorMsg")
+      return false
+    end
+    vim.defer_fn(function()
+      send_transcribe_request(audio_path, attempt + 1)
+    end, 150)
     return true
   end
 
-  stop_worker()
-  state.worker_config_key = key
+  state.request_id = state.request_id + 1
+  state.pending_request_id = state.request_id
 
-  local worker_cmd = {
-    python_bin,
-    script,
-    "--model",
-    M.config.model,
-    "--compute-type",
-    M.config.compute_type,
-    "--device",
-    M.config.device,
-  }
-  if M.config.vad_filter then
-    table.insert(worker_cmd, "--vad-filter")
-  else
-    table.insert(worker_cmd, "--no-vad-filter")
-  end
-
-  local worker_job = vim.fn.jobstart(worker_cmd, {
-    stdout_buffered = false,
-    stderr_buffered = false,
-    on_stdout = function(_, data, _)
+  local ok, chan = pcall(vim.fn.sockconnect, "pipe", state.daemon_socket_path, {
+    rpc = false,
+    on_data = function(_, data, _)
       if not data then
         return
       end
       for _, line in ipairs(data) do
         if line and line ~= "" then
           vim.schedule(function()
-            handle_worker_message(line)
+            handle_daemon_message(line)
           end)
         end
       end
     end,
-    on_stderr = function(_, data, _)
-      if not data then
-        return
-      end
-      for _, line in ipairs(data) do
-        if line and line ~= "" then
-          table.insert(state.worker_stderr_lines, line)
-        end
-      end
-    end,
-    on_exit = function(_, code, _)
-      vim.schedule(function()
-        local had_pending = state.worker_busy
-        local err = state.worker_stderr_lines[1]
-        clear_worker_state()
-        if had_pending then
-          if err and err ~= "" then
-            status("LW: worker exited (" .. code .. "): " .. err, "ErrorMsg")
-          else
-            status("LW: worker exited unexpectedly (" .. code .. ")", "ErrorMsg")
-          end
-        end
-      end)
-    end,
   })
-
-  if worker_job <= 0 then
-    clear_worker_state()
-    status("LW: failed to start transcription worker", "ErrorMsg")
-    return false
+  if not ok then
+    chan = -1
   end
 
-  state.worker_job = worker_job
-  state.worker_ready = false
-  state.worker_busy = false
-  state.worker_stderr_lines = {}
+  if chan <= 0 then
+    if attempt >= 40 then
+      status("LW: failed to connect to daemon", "ErrorMsg")
+      return false
+    end
+    vim.defer_fn(function()
+      send_transcribe_request(audio_path, attempt + 1)
+    end, 150)
+    return true
+  end
+
+  state.request_busy = true
+  state.request_channel = chan
+
+  local payload = vim.json.encode({
+    type = "transcribe",
+    id = state.pending_request_id,
+    audio_path = audio_path,
+  })
+  vim.fn.chansend(chan, payload .. "\n")
+  pcall(vim.fn.chanclose, chan, "stdin")
+
+  local pending_id = state.pending_request_id
+  vim.defer_fn(function()
+    if state.pending_request_id == pending_id then
+      clear_request_state()
+      status("LW: transcription timed out", "ErrorMsg")
+    end
+  end, 120000)
+
   return true
 end
 
 local function transcribe_and_insert()
-  if not ensure_worker() then
-    return
-  end
-  send_worker_request(state.audio_path)
+  send_transcribe_request(state.audio_path, 0)
 end
 
 function M.stop()
@@ -441,7 +480,7 @@ function M.start()
     return
   end
 
-  ensure_worker()
+  ensure_daemon()
 
   state.audio_path = vim.fn.tempname() .. ".wav"
   local cmd = build_record_cmd(state.audio_path)

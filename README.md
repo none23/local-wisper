@@ -52,9 +52,10 @@ You can also trigger install manually:
 - `vad_filter` (boolean): enable VAD filtering. Default: `true`.
 - `sample_rate` (number): recording sample rate. Default: `16000`.
 - `recorder_cmd` (string[]|nil): custom recording command prefix. Plugin appends output wav path.
+- `preload_on_setup` (boolean): start daemon/model warmup on `setup()`. Default: `true`.
 
 ## Performance notes
-- The plugin keeps a persistent Python worker with a preloaded model, so repeated `:LW` calls avoid model reload overhead.
+- The plugin keeps a detached Python daemon with a preloaded model, so repeated `:LW` calls and new Neovim sessions avoid model reload overhead.
 - For lowest latency, prefer `model = "tiny.en"` (or `tiny` for multilingual) and set `vad_filter = false`.
 - If your machine supports it, `device = "cuda"` can be much faster than CPU.
 - CUDA runtime libraries from the plugin venv are auto-discovered/preloaded, so users should not need manual `ldconfig` or `LD_LIBRARY_PATH` setup.
