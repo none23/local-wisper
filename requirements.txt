@@ -1,2 +1,4 @@
 faster-whisper==1.1.1
 requests>=2.32.0
+nvidia-cublas-cu12>=12.0
+nvidia-cudnn-cu12>=9.0

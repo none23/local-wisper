@@ -11,6 +11,7 @@ In normal mode, run `:LW` (or map it) to:
 ## Requirements
 - Linux with `pw-record` (PipeWire)
 - `python3` available on PATH (only needed for first-time dependency bootstrap)
+- CUDA mode (`device = "cuda"`) needs CUDA 12 runtime libraries (`libcublas.so.12`/cuDNN). The plugin installs `nvidia-cublas-cu12` and `nvidia-cudnn-cu12` in its venv.
 
 ## Install
 
@@ -56,6 +57,7 @@ You can also trigger install manually:
 - The plugin keeps a persistent Python worker with a preloaded model, so repeated `:LW` calls avoid model reload overhead.
 - For lowest latency, prefer `model = "tiny.en"` (or `tiny` for multilingual) and set `vad_filter = false`.
 - If your machine supports it, `device = "cuda"` can be much faster than CPU.
+- CUDA runtime libraries from the plugin venv are auto-discovered/preloaded, so users should not need manual `ldconfig` or `LD_LIBRARY_PATH` setup.
 
 ## Usage
 - `:LW`: toggle recording/transcription flow.

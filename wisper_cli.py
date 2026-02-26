@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import glob
 import os
 import select
+import site
 import shutil
 import signal
 import subprocess
@@ -20,6 +23,89 @@ from pathlib import Path
 
 class AppError(Exception):
     """Raised for user-facing runtime errors."""
+
+
+_CUDA_RUNTIME_READY = False
+
+
+def _candidate_cuda_lib_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    seen: set[str] = set()
+    site_dirs = []
+    try:
+        site_dirs.extend(site.getsitepackages())
+    except Exception:
+        pass
+    try:
+        user_site = site.getusersitepackages()
+        if user_site:
+            site_dirs.append(user_site)
+    except Exception:
+        pass
+
+    for root in site_dirs:
+        for rel in ("nvidia/cublas/lib", "nvidia/cudnn/lib"):
+            path = Path(root) / rel
+            key = str(path)
+            if key not in seen and path.is_dir():
+                seen.add(key)
+                dirs.append(path)
+
+    for path in (Path("/opt/cuda/lib64"), Path("/opt/cuda/targets/x86_64-linux/lib"), Path("/usr/local/cuda/lib64")):
+        key = str(path)
+        if key not in seen and path.is_dir():
+            seen.add(key)
+            dirs.append(path)
+
+    return dirs
+
+
+def _prepend_ld_library_path(paths: list[Path]) -> None:
+    if not paths:
+        return
+    current = os.environ.get("LD_LIBRARY_PATH", "")
+    parts = [p for p in current.split(":") if p]
+    for path in reversed([str(p) for p in paths]):
+        if path not in parts:
+            parts.insert(0, path)
+    os.environ["LD_LIBRARY_PATH"] = ":".join(parts)
+
+
+def _first_matching_lib(lib_dirs: list[Path], patterns: tuple[str, ...]) -> Path | None:
+    for lib_dir in lib_dirs:
+        for pattern in patterns:
+            matches = sorted(glob.glob(str(lib_dir / pattern)))
+            if matches:
+                return Path(matches[0])
+    return None
+
+
+def _prepare_cuda_runtime(verbose: bool) -> None:
+    global _CUDA_RUNTIME_READY
+    if _CUDA_RUNTIME_READY:
+        return
+
+    lib_dirs = _candidate_cuda_lib_dirs()
+    _prepend_ld_library_path(lib_dirs)
+
+    libs_to_preload = [
+        ("libcublas.so.12", ("libcublas.so.12", "libcublas.so.*")),
+        ("libcublasLt.so.12", ("libcublasLt.so.12", "libcublasLt.so.*")),
+        ("libcudnn.so.9", ("libcudnn.so.9", "libcudnn.so.*")),
+    ]
+    rtld_global = getattr(ctypes, "RTLD_GLOBAL", 0)
+
+    for display_name, patterns in libs_to_preload:
+        lib_path = _first_matching_lib(lib_dirs, patterns)
+        if lib_path is None:
+            continue
+        try:
+            ctypes.CDLL(str(lib_path), mode=rtld_global)
+            _log(verbose, f"Preloaded CUDA runtime: {display_name} from {lib_path}")
+        except OSError as exc:
+            raise AppError(f"Failed to load CUDA runtime library {display_name}: {exc}") from exc
+
+    _CUDA_RUNTIME_READY = True
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -209,6 +295,8 @@ def _require_faster_whisper() -> None:
 
 
 def load_model(model_name: str, compute_type: str, device: str, verbose: bool):
+    if device.startswith("cuda"):
+        _prepare_cuda_runtime(verbose)
     _require_faster_whisper()
     from faster_whisper import WhisperModel
 
