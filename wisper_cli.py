@@ -37,6 +37,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="faster-whisper compute type (default: int8).",
     )
     parser.add_argument(
+        "--device",
+        default="cpu",
+        help="faster-whisper device (default: cpu).",
+    )
+    parser.add_argument(
+        "--vad-filter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable voice activity detection filtering (default: true).",
+    )
+    parser.add_argument(
         "--sample-rate",
         type=int,
         default=16_000,
@@ -197,7 +208,7 @@ def _require_faster_whisper() -> None:
         ) from exc
 
 
-def load_model(model_name: str, compute_type: str, verbose: bool):
+def load_model(model_name: str, compute_type: str, device: str, verbose: bool):
     _require_faster_whisper()
     from faster_whisper import WhisperModel
 
@@ -207,24 +218,35 @@ def load_model(model_name: str, compute_type: str, verbose: bool):
             file=sys.stderr,
         )
     t0 = time.perf_counter()
-    model = WhisperModel(model_name, device="cpu", compute_type=compute_type)
+    model = WhisperModel(model_name, device=device, compute_type=compute_type)
     _log(verbose, f"Model load/init took {time.perf_counter() - t0:.2f}s")
     return model
 
 
-def transcribe_with_model(audio_path: Path, model, verbose: bool, show_banner: bool) -> str:
+def transcribe_with_model(
+    audio_path: Path, model, verbose: bool, show_banner: bool, vad_filter: bool
+) -> str:
     if show_banner and verbose:
         print("Transcribing audio...", file=sys.stderr)
     t1 = time.perf_counter()
-    segments, _info = model.transcribe(str(audio_path), vad_filter=True)
+    segments, _info = model.transcribe(str(audio_path), vad_filter=vad_filter)
     text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
     _log(verbose, f"Transcription took {time.perf_counter() - t1:.2f}s")
     return text
 
 
-def transcribe_file(audio_path: Path, model_name: str, compute_type: str, verbose: bool) -> str:
-    model = load_model(model_name, compute_type, verbose)
-    return transcribe_with_model(audio_path, model, verbose, show_banner=True)
+def transcribe_file(
+    audio_path: Path,
+    model_name: str,
+    compute_type: str,
+    device: str,
+    vad_filter: bool,
+    verbose: bool,
+) -> str:
+    model = load_model(model_name, compute_type, device, verbose)
+    return transcribe_with_model(
+        audio_path, model, verbose, show_banner=True, vad_filter=vad_filter
+    )
 
 
 def _create_audio_path() -> tuple[Path, tempfile.TemporaryDirectory[str]]:
@@ -330,7 +352,7 @@ def main() -> int:
                     stop_thread.start()
 
                     if model is None:
-                        model = load_model(args.model, args.compute_type, args.verbose)
+                        model = load_model(args.model, args.compute_type, args.device, args.verbose)
                     while not stop_event.is_set():
                         stop_event.wait(timeout=args.live_interval)
                         if stop_event.is_set():
@@ -338,7 +360,11 @@ def main() -> int:
                         if not audio_path.exists() or audio_path.stat().st_size < 2048:
                             continue
                         live_text = transcribe_with_model(
-                            audio_path, model, args.verbose, show_banner=False
+                            audio_path,
+                            model,
+                            args.verbose,
+                            show_banner=False,
+                            vad_filter=args.vad_filter,
                         )
                         if not live_text or live_text == last_live_text:
                             continue
@@ -374,9 +400,22 @@ def main() -> int:
             else:
                 try:
                     if model is None:
-                        text = transcribe_file(audio_path, args.model, args.compute_type, args.verbose)
+                        text = transcribe_file(
+                            audio_path,
+                            args.model,
+                            args.compute_type,
+                            args.device,
+                            args.vad_filter,
+                            args.verbose,
+                        )
                     else:
-                        text = transcribe_with_model(audio_path, model, args.verbose, show_banner=True)
+                        text = transcribe_with_model(
+                            audio_path,
+                            model,
+                            args.verbose,
+                            show_banner=True,
+                            vad_filter=args.vad_filter,
+                        )
                     if text:
                         if args.live:
                             print("\nFinal transcript:")

@@ -19,6 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("audio_path", type=Path, help="Path to WAV audio file.")
     parser.add_argument("--model", default="small.en")
     parser.add_argument("--compute-type", default="int8")
+    parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--vad-filter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     return parser
 
 
@@ -30,8 +36,14 @@ def main() -> int:
         return 1
 
     try:
-        model = load_model(args.model, args.compute_type, verbose=False)
-        text = transcribe_with_model(args.audio_path, model, verbose=False, show_banner=False)
+        model = load_model(args.model, args.compute_type, args.device, verbose=False)
+        text = transcribe_with_model(
+            args.audio_path,
+            model,
+            verbose=False,
+            show_banner=False,
+            vad_filter=args.vad_filter,
+        )
     except AppError as exc:
         print(str(exc), file=sys.stderr)
         return 1
