@@ -21,7 +21,7 @@ In normal mode, run `:LW` (or map it) to:
   "none23/local-wisper",
   config = function()
     require("lw").setup({
-      model = "tiny.en",
+      model = "tiny",
       compute_type = "int8",
       device = "cpu",
       vad_filter = false,
@@ -46,7 +46,7 @@ You can also trigger install manually:
 - `python_bin` (string|nil): explicit Python executable for transcription. If set, auto-bootstrap is skipped.
 - `venv_dir` (string|nil): target venv dir for auto-bootstrap. Default: `stdpath("data") .. "/lw.nvim/.venv"`.
 - `auto_install_deps` (boolean): auto-install missing dependencies on `:LW`. Default: `true`.
-- `model` (string): Whisper model name/path. Default: `small.en`.
+- `model` (string): Whisper model name/path. Default: `small`.
 - `compute_type` (string): faster-whisper compute type. Default: `int8`.
 - `device` (string): faster-whisper device. Default: `cpu`.
 - `vad_filter` (boolean): enable VAD filtering. Default: `true`.
@@ -56,7 +56,7 @@ You can also trigger install manually:
 
 ## Performance notes
 - The plugin keeps a detached Python daemon with a preloaded model, so repeated `:LW` calls and new Neovim sessions avoid model reload overhead.
-- For lowest latency, prefer `model = "tiny.en"` (or `tiny` for multilingual) and set `vad_filter = false`.
+- For lowest latency, prefer `model = "tiny"` and set `vad_filter = false`.
 - If your machine supports it, `device = "cuda"` can be much faster than CPU.
 - CUDA runtime libraries from the plugin venv are auto-discovered/preloaded, so users should not need manual `ldconfig` or `LD_LIBRARY_PATH` setup.
 

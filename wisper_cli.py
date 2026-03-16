@@ -139,8 +139,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default="small.en",
-        help="Whisper model name/path for faster-whisper (default: small.en).",
+        default="small",
+        help="Whisper model name/path for faster-whisper (default: small).",
     )
     parser.add_argument(
         "--compute-type",

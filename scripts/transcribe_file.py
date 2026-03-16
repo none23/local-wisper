@@ -17,7 +17,7 @@ from wisper_cli import AppError, load_model, transcribe_with_model
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Transcribe a WAV file and print text.")
     parser.add_argument("audio_path", type=Path, help="Path to WAV audio file.")
-    parser.add_argument("--model", default="small.en")
+    parser.add_argument("--model", default="small")
     parser.add_argument("--compute-type", default="int8")
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
