@@ -1,4 +1,5 @@
 local M = {}
+local DAEMON_READY_TIMEOUT_MS = 120000
 
 M.config = {
   python_bin = nil,
@@ -28,6 +29,9 @@ local state = {
   request_id = 0,
   pending_request_id = nil,
   request_channel = nil,
+  daemon_job = nil,
+  daemon_start_error = nil,
+  daemon_stderr_tail = {},
 }
 
 local function status(text, hl)
@@ -35,6 +39,7 @@ local function status(text, hl)
 end
 
 local ensure_daemon
+local daemon_reachable
 
 local function daemon_script_and_repo_root()
   local script = vim.api.nvim_get_runtime_file("scripts/transcribe_daemon.py", false)[1]
@@ -99,6 +104,30 @@ local function daemon_socket_path_for_key(key)
     pcall(vim.fn.mkdir, base, "p")
   end
   return base .. "/daemon-" .. short_hash(key) .. ".sock"
+end
+
+local function daemon_ready_max_attempts()
+  return math.max(1, math.ceil(DAEMON_READY_TIMEOUT_MS / 150))
+end
+
+local function reset_daemon_start_state()
+  state.daemon_start_error = nil
+  state.daemon_stderr_tail = {}
+end
+
+local function daemon_start_failure_detail(exit_code)
+  local detail = nil
+  for i = #state.daemon_stderr_tail, 1, -1 do
+    local line = state.daemon_stderr_tail[i]
+    if line and line ~= "" then
+      detail = line
+      break
+    end
+  end
+  if detail and detail ~= "" then
+    return detail
+  end
+  return "exit code " .. tostring(exit_code)
 end
 
 local function add_text_below_cursor(text)
@@ -225,7 +254,7 @@ local function clear_stop_mapping()
 end
 
 local function start_daemon()
-  local script = daemon_script_and_repo_root()
+  local script, repo_root = daemon_script_and_repo_root()
   if not script then
     status("LW: could not find scripts/transcribe_daemon.py", "ErrorMsg")
     return false
@@ -247,6 +276,7 @@ local function start_daemon()
     return true
   end
 
+  reset_daemon_start_state()
   local cmd = {
     python_bin,
     script,
@@ -265,17 +295,43 @@ local function start_daemon()
     table.insert(cmd, "--no-vad-filter")
   end
 
-  local job = vim.fn.jobstart(cmd, { detach = true })
+  local job = vim.fn.jobstart(cmd, {
+    cwd = repo_root,
+    detach = true,
+    stderr_buffered = false,
+    on_stderr = function(_, data, _)
+      if not data then
+        return
+      end
+      for _, line in ipairs(data) do
+        if line and line ~= "" then
+          table.insert(state.daemon_stderr_tail, line)
+          if #state.daemon_stderr_tail > 20 then
+            table.remove(state.daemon_stderr_tail, 1)
+          end
+        end
+      end
+    end,
+    on_exit = function(_, code, _)
+      vim.schedule(function()
+        state.daemon_job = nil
+        if code ~= 0 and not daemon_reachable() then
+          state.daemon_start_error = daemon_start_failure_detail(code)
+        end
+      end)
+    end,
+  })
   if job <= 0 then
     status("LW: failed to start transcription daemon", "ErrorMsg")
     return false
   end
 
+  state.daemon_job = job
   state.daemon_last_start_ms = now_ms
   return true
 end
 
-local function daemon_reachable()
+daemon_reachable = function()
   if not state.daemon_socket_path or state.daemon_socket_path == "" then
     return false
   end
@@ -299,6 +355,7 @@ ensure_daemon = function()
   end
 
   if daemon_reachable() then
+    state.daemon_start_error = nil
     return true
   end
 
@@ -344,15 +401,20 @@ local function send_transcribe_request(audio_path, attempt)
   end
 
   attempt = attempt or 0
+  local max_attempts = daemon_ready_max_attempts()
   if not ensure_daemon() then
     return false
   end
 
   if not daemon_reachable() then
+    if state.daemon_start_error then
+      status("LW: daemon failed to start: " .. state.daemon_start_error, "ErrorMsg")
+      return false
+    end
     if attempt == 0 then
       status("LW: loading model...", "ModeMsg")
     end
-    if attempt >= 40 then
+    if attempt >= max_attempts then
       status("LW: daemon did not become ready", "ErrorMsg")
       return false
     end
@@ -385,7 +447,7 @@ local function send_transcribe_request(audio_path, attempt)
   end
 
   if chan <= 0 then
-    if attempt >= 40 then
+    if attempt >= max_attempts then
       status("LW: failed to connect to daemon", "ErrorMsg")
       return false
     end

@@ -122,9 +122,11 @@ def main() -> int:
 
     try:
         model = load_model(args.model, args.compute_type, args.device, verbose=False)
-    except AppError:
+    except AppError as exc:
+        print(str(exc), file=sys.stderr, flush=True)
         return 1
-    except Exception:
+    except Exception as exc:
+        print(f"{exc.__class__.__name__}: {exc}", file=sys.stderr, flush=True)
         return 1
 
     server = DaemonServer(str(socket_path), RequestHandler, model, args.vad_filter)
