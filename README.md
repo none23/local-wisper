@@ -63,6 +63,21 @@ You can also trigger install manually:
 ## Usage
 - `:LW`: toggle recording/transcription flow.
 - while recording, press `Enter` to stop and insert transcript.
+- `lw preload`: start the persistent daemon and preload the model for non-Neovim integrations.
+- `lw sway-start` / `lw sway-stop`: start or stop a detached recording session intended for Sway keybindings.
+
+## Sway
+- Install `lw` first:
+  - `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
+  - `./install.sh`
+- The Sway-specific wrapper now lives in your Sway config repo:
+  - `swaywm-config/sway/scripts/local-wisper.sh`
+- The sample Sway config in this workspace preloads the daemon on startup and binds `Mod+\`` to:
+  - start recording and enter a Sway mode shown by Waybar's `sway/mode`
+  - stop on the second `Mod+\`` or `Enter`
+  - cancel on `Escape`
+- The stop action transcribes through the persistent daemon and types the final text into the focused window with `wtype`.
+- Set `LW_OUTPUT_MODE=clipboard` in the wrapper environment if you want the old clipboard behavior back.
 
 ## Troubleshooting
 - `failed to start recorder`:

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="${SCRIPT_DIR}"
 CLI_PATH="${PROJECT_ROOT}/wisper_cli.py"
 PYTHON_PATH="${PROJECT_ROOT}/.venv/bin/python"
 TARGET_DIR="${HOME}/.local/bin"
