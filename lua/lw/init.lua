@@ -67,12 +67,6 @@ local function resolve_python_bin()
     return state.resolved_python
   end
 
-  local venv_python = default_venv_python()
-  if vim.fn.executable(venv_python) == 1 then
-    state.resolved_python = venv_python
-    return venv_python
-  end
-
   local _, repo_root = daemon_script_and_repo_root()
   if repo_root then
     local repo_venv = repo_root .. "/.venv/bin/python"
@@ -80,6 +74,12 @@ local function resolve_python_bin()
       state.resolved_python = repo_venv
       return repo_venv
     end
+  end
+
+  local venv_python = default_venv_python()
+  if vim.fn.executable(venv_python) == 1 then
+    state.resolved_python = venv_python
+    return venv_python
   end
 
   return venv_python
