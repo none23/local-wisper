@@ -266,7 +266,7 @@ def _config_key(
     device: str,
     vad_filter: bool,
 ) -> str:
-    return "|".join((backend, model_name, compute_type, device, str(vad_filter)))
+    return "|".join((backend, model_name, compute_type, device, "true" if vad_filter else "false"))
 
 
 def _short_hash(text: str) -> str:
@@ -722,7 +722,11 @@ def transcribe_with_model(
 
         try:
             with model["torch"].inference_mode():
-                output = model["model"].transcribe([str(prepared_path)], batch_size=1)
+                output = model["model"].transcribe(
+                    [str(prepared_path)],
+                    batch_size=1,
+                    verbose=False,
+                )
         finally:
             if tempdir is not None:
                 tempdir.cleanup()
