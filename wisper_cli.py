@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record microphone audio locally and transcribe it with a local Whisper model."""
+"""Record microphone audio locally and transcribe it with a local model."""
 
 from __future__ import annotations
 
@@ -21,11 +21,21 @@ import termios
 import threading
 import time
 import tty
+import wave
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parent
 _CUDA_RUNTIME_READY = False
+DEFAULT_BACKEND = "parakeet"
+DEFAULT_MODELS = {
+    "parakeet": "nvidia/parakeet-tdt-0.6b-v3",
+    "whisper": "small",
+}
+DEFAULT_COMPUTE_TYPES = {
+    "parakeet": "float32",
+    "whisper": "int8",
+}
 
 
 class AppError(Exception):
@@ -48,12 +58,13 @@ def _candidate_cuda_lib_dirs() -> list[Path]:
         pass
 
     for root in site_dirs:
-        for rel in ("nvidia/cublas/lib", "nvidia/cudnn/lib"):
-            path = Path(root) / rel
-            key = str(path)
-            if key not in seen and path.is_dir():
-                seen.add(key)
-                dirs.append(path)
+        nvidia_root = Path(root) / "nvidia"
+        if nvidia_root.is_dir():
+            for lib_dir in sorted(nvidia_root.glob("*/lib")):
+                key = str(lib_dir)
+                if key not in seen and lib_dir.is_dir():
+                    seen.add(key)
+                    dirs.append(lib_dir)
 
     for path in (
         Path("/opt/cuda/lib64"),
@@ -97,9 +108,9 @@ def _prepare_cuda_runtime(verbose: bool) -> None:
     _prepend_ld_library_path(lib_dirs)
 
     libs_to_preload = [
-        ("libcublas.so.12", ("libcublas.so.12", "libcublas.so.*")),
-        ("libcublasLt.so.12", ("libcublasLt.so.12", "libcublasLt.so.*")),
-        ("libcudnn.so.9", ("libcudnn.so.9", "libcudnn.so.*")),
+        ("libcublas", ("libcublas.so", "libcublas.so.*")),
+        ("libcublasLt", ("libcublasLt.so", "libcublasLt.so.*")),
+        ("libcudnn", ("libcudnn.so", "libcudnn.so.*")),
     ]
     rtld_global = getattr(ctypes, "RTLD_GLOBAL", 0)
 
@@ -119,7 +130,7 @@ def _prepare_cuda_runtime(verbose: bool) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Record from microphone and print a local Whisper transcription, or drive "
+            "Record from microphone and print a local transcription, or drive "
             "the persistent daemon used for low-latency editor and Sway integrations."
         )
     )
@@ -138,19 +149,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Action to run (default: record).",
     )
     parser.add_argument(
+        "--backend",
+        choices=["parakeet", "whisper"],
+        default=DEFAULT_BACKEND,
+        help=f"Transcription backend to use (default: {DEFAULT_BACKEND}).",
+    )
+    parser.add_argument(
         "--model",
-        default="small",
-        help="Whisper model name/path for faster-whisper (default: small).",
+        help="Model name/path for the selected backend.",
     )
     parser.add_argument(
         "--compute-type",
-        default="int8",
-        help="faster-whisper compute type (default: int8).",
+        help="Compute type for the selected backend.",
     )
     parser.add_argument(
         "--device",
         default="cpu",
-        help="faster-whisper device (default: cpu).",
+        help="Device for inference (default: cpu).",
     )
     parser.add_argument(
         "--vad-filter",
@@ -192,8 +207,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--daemon-timeout",
         type=float,
-        default=20.0,
-        help="Seconds to wait for the daemon to become ready (default: 20).",
+        default=300.0,
+        help="Seconds to wait for the daemon to become ready (default: 300).",
     )
     parser.add_argument(
         "--transcribe-timeout",
@@ -226,8 +241,32 @@ def _status_done() -> None:
     print()
 
 
-def _config_key(model_name: str, compute_type: str, device: str, vad_filter: bool) -> str:
-    return "|".join((model_name, compute_type, device, str(vad_filter)))
+def _default_model_name(backend: str) -> str:
+    return DEFAULT_MODELS[backend]
+
+
+def _default_compute_type(backend: str) -> str:
+    return DEFAULT_COMPUTE_TYPES[backend]
+
+
+def _resolve_backend_options(
+    backend: str,
+    model_name: str | None,
+    compute_type: str | None,
+) -> tuple[str, str]:
+    resolved_model = model_name or _default_model_name(backend)
+    resolved_compute_type = compute_type or _default_compute_type(backend)
+    return resolved_model, resolved_compute_type
+
+
+def _config_key(
+    backend: str,
+    model_name: str,
+    compute_type: str,
+    device: str,
+    vad_filter: bool,
+) -> str:
+    return "|".join((backend, model_name, compute_type, device, str(vad_filter)))
 
 
 def _short_hash(text: str) -> str:
@@ -242,6 +281,7 @@ def _cache_dir() -> Path:
 
 
 def daemon_socket_path(
+    backend: str,
     model_name: str,
     compute_type: str,
     device: str,
@@ -253,10 +293,11 @@ def daemon_socket_path(
         return Path(explicit_path).expanduser()
     base = _cache_dir()
     base.mkdir(parents=True, exist_ok=True)
-    return base / f"daemon-{_short_hash(_config_key(model_name, compute_type, device, vad_filter))}.sock"
+    return base / f"daemon-{_short_hash(_config_key(backend, model_name, compute_type, device, vad_filter))}.sock"
 
 
 def sway_state_path(
+    backend: str,
     model_name: str,
     compute_type: str,
     device: str,
@@ -268,7 +309,7 @@ def sway_state_path(
         return Path(explicit_path).expanduser()
     base = _cache_dir()
     base.mkdir(parents=True, exist_ok=True)
-    return base / f"sway-{_short_hash(_config_key(model_name, compute_type, device, vad_filter))}.json"
+    return base / f"sway-{_short_hash(_config_key(backend, model_name, compute_type, device, vad_filter))}.json"
 
 
 def _daemon_script_path() -> Path:
@@ -450,6 +491,19 @@ def stop_recording_pid(pid: int, backend: str) -> None:
         raise AppError("Timed out waiting for recorder to exit.")
 
 
+def _require_parakeet_runtime() -> tuple[object, object]:
+    try:
+        import nemo.collections.asr as nemo_asr
+        import torch
+    except Exception as exc:  # pragma: no cover - import failure path
+        raise AppError(
+            "Missing dependency 'nemo_toolkit[asr]'. Install dependencies with "
+            "`python -m pip install -r requirements.txt`. "
+            f"Import error: {exc.__class__.__name__}: {exc}"
+        ) from exc
+    return torch, nemo_asr
+
+
 def _require_faster_whisper() -> None:
     try:
         import faster_whisper  # noqa: F401
@@ -461,7 +515,167 @@ def _require_faster_whisper() -> None:
         ) from exc
 
 
-def load_model(model_name: str, compute_type: str, device: str, verbose: bool):
+def _normalize_device(device: str, torch) -> object:
+    if device == "cpu":
+        return torch.device("cpu")
+    if device.startswith("cuda"):
+        if not torch.cuda.is_available():
+            raise AppError("CUDA device requested, but torch.cuda.is_available() is false.")
+        return torch.device(device)
+    raise AppError(f"Unsupported device '{device}'. Use 'cpu' or 'cuda[:index]'.")
+
+
+def _resolve_torch_dtype(compute_type: str, device: object, torch, verbose: bool):
+    normalized = compute_type.strip().lower()
+    if normalized in {"default", "float", "float32", "fp32"}:
+        return torch.float32
+    if normalized in {"float16", "fp16", "half"}:
+        if device.type != "cuda":
+            raise AppError(f"Compute type '{compute_type}' requires a CUDA device.")
+        return torch.float16
+    if normalized in {"bfloat16", "bf16"}:
+        return torch.bfloat16
+    if normalized.startswith("int8"):
+        _log(verbose, f"Compute type '{compute_type}' is not supported by Parakeet; using float32.")
+        return torch.float32
+    raise AppError(
+        "Unsupported compute type for Parakeet. "
+        "Use one of: float32, float16, bfloat16."
+    )
+
+
+def _extract_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("text", "pred_text", "transcript"):
+            text = value.get(key)
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        return ""
+    text = getattr(value, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    pred_text = getattr(value, "pred_text", None)
+    if isinstance(pred_text, str):
+        return pred_text.strip()
+    if isinstance(value, (list, tuple)):
+        parts = [_extract_text(item) for item in value]
+        return " ".join(part for part in parts if part).strip()
+    return ""
+
+
+def _write_filtered_wav(audio_path: Path, verbose: bool) -> tuple[Path | None, tempfile.TemporaryDirectory[str] | None]:
+    try:
+        import numpy as np
+    except Exception as exc:
+        raise AppError(f"Failed to import numpy for VAD preprocessing: {exc}") from exc
+
+    try:
+        with wave.open(str(audio_path), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            nframes = wav_file.getnframes()
+            pcm_bytes = wav_file.readframes(nframes)
+    except (wave.Error, OSError) as exc:
+        _log(verbose, f"Skipping VAD preprocessing for {audio_path}: {exc}")
+        return audio_path, None
+
+    if sample_width != 2 or channels < 1 or nframes <= 0:
+        return audio_path, None
+
+    samples = np.frombuffer(pcm_bytes, dtype="<i2")
+    if samples.size == 0:
+        return None, None
+    if channels > 1:
+        samples = samples.reshape(-1, channels).mean(axis=1).astype(np.int16)
+
+    frame_samples = max(1, int(sample_rate * 0.03))
+    total_frames = samples.shape[0] // frame_samples
+    if total_frames == 0:
+        return audio_path, None
+
+    trimmed = samples[: total_frames * frame_samples].astype(np.float32)
+    framed = trimmed.reshape(total_frames, frame_samples)
+    frame_rms = np.sqrt(np.mean(np.square(framed), axis=1))
+    peak_rms = float(frame_rms.max(initial=0.0))
+    if peak_rms < 80.0:
+        return None, None
+
+    active = frame_rms >= max(120.0, peak_rms * 0.08)
+    if not active.any():
+        return None, None
+
+    padding_frames = max(1, int(round(0.15 / 0.03)))
+    expanded = active.copy()
+    for index, is_active in enumerate(active):
+        if not is_active:
+            continue
+        start = max(0, index - padding_frames)
+        stop = min(active.shape[0], index + padding_frames + 1)
+        expanded[start:stop] = True
+
+    kept_chunks: list[np.ndarray] = []
+    for index, keep in enumerate(expanded):
+        if keep:
+            start = index * frame_samples
+            stop = start + frame_samples
+            kept_chunks.append(samples[start:stop])
+
+    remainder = samples[total_frames * frame_samples :]
+    if remainder.size and expanded[-1]:
+        kept_chunks.append(remainder)
+
+    if not kept_chunks:
+        return None, None
+
+    filtered = np.concatenate(kept_chunks).astype(np.int16, copy=False)
+    if filtered.size == 0:
+        return None, None
+
+    tempdir = tempfile.TemporaryDirectory(prefix="wisper_vad_")
+    filtered_path = Path(tempdir.name) / audio_path.name
+    with wave.open(str(filtered_path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(filtered.tobytes())
+    return filtered_path, tempdir
+
+
+def _load_parakeet_model(model_name: str, compute_type: str, device: str, verbose: bool):
+    if device.startswith("cuda"):
+        _prepare_cuda_runtime(verbose)
+    torch, nemo_asr = _require_parakeet_runtime()
+    target_device = _normalize_device(device, torch)
+    dtype = _resolve_torch_dtype(compute_type, target_device, torch, verbose)
+
+    if verbose:
+        print(
+            "Loading local Parakeet model (first run may download weights)...",
+            file=sys.stderr,
+        )
+    t0 = time.perf_counter()
+    try:
+        model = nemo_asr.models.ASRModel.from_pretrained(
+            model_name=model_name,
+            map_location=target_device,
+        )
+    except TypeError:
+        model = nemo_asr.models.ASRModel.from_pretrained(model_name=model_name)
+        model = model.to(target_device)
+
+    if dtype != torch.float32:
+        model = model.to(dtype=dtype)
+    model = model.eval()
+    _log(verbose, f"Model load/init took {time.perf_counter() - t0:.2f}s")
+    return {"backend": "parakeet", "model": model, "torch": torch}
+
+
+def _load_whisper_model(model_name: str, compute_type: str, device: str, verbose: bool):
     if device.startswith("cuda"):
         _prepare_cuda_runtime(verbose)
     _require_faster_whisper()
@@ -475,7 +689,21 @@ def load_model(model_name: str, compute_type: str, device: str, verbose: bool):
     t0 = time.perf_counter()
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
     _log(verbose, f"Model load/init took {time.perf_counter() - t0:.2f}s")
-    return model
+    return {"backend": "whisper", "model": model}
+
+
+def load_model(
+    backend: str,
+    model_name: str,
+    compute_type: str,
+    device: str,
+    verbose: bool,
+):
+    if backend == "parakeet":
+        return _load_parakeet_model(model_name, compute_type, device, verbose)
+    if backend == "whisper":
+        return _load_whisper_model(model_name, compute_type, device, verbose)
+    raise AppError(f"Unsupported backend '{backend}'.")
 
 
 def transcribe_with_model(
@@ -484,21 +712,41 @@ def transcribe_with_model(
     if show_banner and verbose:
         print("Transcribing audio...", file=sys.stderr)
     t1 = time.perf_counter()
-    segments, _info = model.transcribe(str(audio_path), vad_filter=vad_filter)
-    text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
+    if model["backend"] == "parakeet":
+        prepared_path = audio_path
+        tempdir: tempfile.TemporaryDirectory[str] | None = None
+        if vad_filter:
+            prepared_path, tempdir = _write_filtered_wav(audio_path, verbose)
+            if prepared_path is None:
+                return ""
+
+        try:
+            with model["torch"].inference_mode():
+                output = model["model"].transcribe([str(prepared_path)], batch_size=1)
+        finally:
+            if tempdir is not None:
+                tempdir.cleanup()
+
+        text = _extract_text(output)
+    elif model["backend"] == "whisper":
+        segments, _info = model["model"].transcribe(str(audio_path), vad_filter=vad_filter)
+        text = " ".join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
+    else:
+        raise AppError(f"Unsupported backend '{model['backend']}'.")
     _log(verbose, f"Transcription took {time.perf_counter() - t1:.2f}s")
     return text
 
 
 def transcribe_file(
     audio_path: Path,
+    backend: str,
     model_name: str,
     compute_type: str,
     device: str,
     vad_filter: bool,
     verbose: bool,
 ) -> str:
-    model = load_model(model_name, compute_type, device, verbose)
+    model = load_model(backend, model_name, compute_type, device, verbose)
     return transcribe_with_model(
         audio_path, model, verbose, show_banner=True, vad_filter=vad_filter
     )
@@ -608,6 +856,7 @@ def _socket_is_live(socket_path: Path) -> bool:
 
 
 def ensure_daemon(
+    backend: str,
     model_name: str,
     compute_type: str,
     device: str,
@@ -629,6 +878,8 @@ def ensure_daemon(
     cmd = [
         sys.executable,
         str(script_path),
+        "--backend",
+        backend,
         "--model",
         model_name,
         "--compute-type",
@@ -691,6 +942,7 @@ def _daemon_request(socket_path: Path, payload: dict, timeout: float) -> dict:
 
 def transcribe_file_via_daemon(
     audio_path: Path,
+    backend: str,
     model_name: str,
     compute_type: str,
     device: str,
@@ -705,6 +957,7 @@ def transcribe_file_via_daemon(
         return ""
 
     ensure_daemon(
+        backend,
         model_name,
         compute_type,
         device,
@@ -848,16 +1101,19 @@ def _require_sway_state(state_path: Path) -> dict:
 
 
 def cmd_preload(args: argparse.Namespace) -> int:
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     socket_path = daemon_socket_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.socket_path,
     )
     ensure_daemon(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         verbose=args.verbose,
@@ -869,9 +1125,11 @@ def cmd_preload(args: argparse.Namespace) -> int:
 
 
 def cmd_sway_start(args: argparse.Namespace) -> int:
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     state_path = sway_state_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.state_path,
@@ -906,16 +1164,18 @@ def cmd_sway_start(args: argparse.Namespace) -> int:
     )
 
     socket_path = daemon_socket_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.socket_path,
     )
     try:
         ensure_daemon(
-            args.model,
-            args.compute_type,
+            args.backend,
+            model_name,
+            compute_type,
             args.device,
             args.vad_filter,
             verbose=args.verbose,
@@ -930,9 +1190,11 @@ def cmd_sway_start(args: argparse.Namespace) -> int:
 
 
 def cmd_sway_stop(args: argparse.Namespace) -> int:
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     state_path = sway_state_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.state_path,
@@ -952,14 +1214,16 @@ def cmd_sway_stop(args: argparse.Namespace) -> int:
         stop_recording_pid(pid, backend)
         text = transcribe_file_via_daemon(
             audio_path,
-            args.model,
-            args.compute_type,
+            args.backend,
+            model_name,
+            compute_type,
             args.device,
             args.vad_filter,
             verbose=args.verbose,
             socket_path=daemon_socket_path(
-                args.model,
-                args.compute_type,
+                args.backend,
+                model_name,
+                compute_type,
                 args.device,
                 args.vad_filter,
                 explicit_path=args.socket_path,
@@ -993,9 +1257,11 @@ def cmd_sway_stop(args: argparse.Namespace) -> int:
 
 
 def cmd_sway_cancel(args: argparse.Namespace) -> int:
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     state_path = sway_state_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.state_path,
@@ -1014,9 +1280,11 @@ def cmd_sway_cancel(args: argparse.Namespace) -> int:
 
 
 def cmd_sway_toggle(args: argparse.Namespace) -> int:
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     state_path = sway_state_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.state_path,
@@ -1031,9 +1299,11 @@ def cmd_record(args: argparse.Namespace) -> int:
     if args.live_interval <= 0:
         raise AppError("--live-interval must be > 0.")
 
+    model_name, compute_type = _resolve_backend_options(args.backend, args.model, args.compute_type)
     socket_path = daemon_socket_path(
-        args.model,
-        args.compute_type,
+        args.backend,
+        model_name,
+        compute_type,
         args.device,
         args.vad_filter,
         explicit_path=args.socket_path,
@@ -1067,7 +1337,7 @@ def cmd_record(args: argparse.Namespace) -> int:
                     stop_thread.start()
 
                     if model is None:
-                        model = load_model(args.model, args.compute_type, args.device, args.verbose)
+                        model = load_model(args.backend, model_name, compute_type, args.device, args.verbose)
                     while not stop_event.is_set():
                         stop_event.wait(timeout=args.live_interval)
                         if stop_event.is_set():
@@ -1090,8 +1360,9 @@ def cmd_record(args: argparse.Namespace) -> int:
                 else:
                     try:
                         ensure_daemon(
-                            args.model,
-                            args.compute_type,
+                            args.backend,
+                            model_name,
+                            compute_type,
                             args.device,
                             args.vad_filter,
                             verbose=args.verbose,
@@ -1123,8 +1394,9 @@ def cmd_record(args: argparse.Namespace) -> int:
                 if model is None:
                     text = transcribe_file_via_daemon(
                         audio_path,
-                        args.model,
-                        args.compute_type,
+                        args.backend,
+                        model_name,
+                        compute_type,
                         args.device,
                         args.vad_filter,
                         verbose=args.verbose,
