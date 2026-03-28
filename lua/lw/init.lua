@@ -59,6 +59,22 @@ local function default_venv_python()
   return default_venv_dir() .. "/bin/python"
 end
 
+local function bootstrap_python_bin()
+  if M.config.python_bin and M.config.python_bin ~= "" and vim.fn.executable(M.config.python_bin) == 1 then
+    return M.config.python_bin
+  end
+
+  local _, repo_root = daemon_script_and_repo_root()
+  if repo_root then
+    local repo_venv = repo_root .. "/.venv/bin/python"
+    if vim.fn.executable(repo_venv) == 1 then
+      return repo_venv
+    end
+  end
+
+  return "python3"
+end
+
 local function resolve_python_bin()
   if M.config.python_bin and M.config.python_bin ~= "" then
     return M.config.python_bin
@@ -184,9 +200,11 @@ function M.install_deps(cb)
 
   local venv_dir = default_venv_dir()
   local venv_python = default_venv_python()
+  local bootstrap_python = bootstrap_python_bin()
   vim.fn.mkdir(vim.fn.fnamemodify(venv_dir, ":h"), "p")
 
-  local cmd = "python3 -m venv "
+  local cmd = vim.fn.shellescape(bootstrap_python)
+    .. " -m venv "
     .. vim.fn.shellescape(venv_dir)
     .. " && "
     .. vim.fn.shellescape(venv_python)
