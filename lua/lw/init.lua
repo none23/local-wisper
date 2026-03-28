@@ -1,12 +1,13 @@
 local M = {}
-local DAEMON_READY_TIMEOUT_MS = 120000
+local DAEMON_READY_TIMEOUT_MS = 300000
 
 M.config = {
   python_bin = nil,
   venv_dir = nil,
   auto_install_deps = true,
-  model = "small",
-  compute_type = "int8",
+  backend = "parakeet",
+  model = nil,
+  compute_type = nil,
   device = "cpu",
   vad_filter = true,
   sample_rate = 16000,
@@ -85,7 +86,9 @@ local function resolve_python_bin()
 end
 
 local function daemon_config_key()
-  return table.concat({ M.config.model, M.config.compute_type, M.config.device, tostring(M.config.vad_filter) }, "|")
+  local model = M.config.model or (M.config.backend == "whisper" and "small" or "nvidia/parakeet-tdt-0.6b-v3")
+  local compute_type = M.config.compute_type or (M.config.backend == "whisper" and "int8" or "float32")
+  return table.concat({ M.config.backend, model, compute_type, M.config.device, tostring(M.config.vad_filter) }, "|")
 end
 
 local function short_hash(text)
@@ -97,7 +100,7 @@ local function short_hash(text)
 end
 
 local function daemon_socket_path_for_key(key)
-  local base = vim.fn.stdpath("cache") .. "/lw.nvim"
+  local base = vim.env.XDG_CACHE_HOME and (vim.env.XDG_CACHE_HOME .. "/lw.nvim") or (vim.fn.expand("~/.cache") .. "/lw.nvim")
   local ok = pcall(vim.fn.mkdir, base, "p")
   if not ok then
     base = "/tmp/lw.nvim"
@@ -277,13 +280,17 @@ local function start_daemon()
   end
 
   reset_daemon_start_state()
+  local model = M.config.model or (M.config.backend == "whisper" and "small" or "nvidia/parakeet-tdt-0.6b-v3")
+  local compute_type = M.config.compute_type or (M.config.backend == "whisper" and "int8" or "float32")
   local cmd = {
     python_bin,
     script,
+    "--backend",
+    M.config.backend,
     "--model",
-    M.config.model,
+    model,
     "--compute-type",
-    M.config.compute_type,
+    compute_type,
     "--device",
     M.config.device,
     "--socket",

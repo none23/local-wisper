@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""Slow test daemon that delays socket creation before replying once."""
+"""Test daemon that echoes startup backend/config on transcription."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import socket
-import time
 from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--socket", required=True)
-    parser.add_argument("--backend")
+    parser.add_argument("--backend", required=True)
     parser.add_argument("--model")
     parser.add_argument("--compute-type")
     parser.add_argument("--device")
@@ -28,7 +27,15 @@ def main() -> int:
     socket_path.parent.mkdir(parents=True, exist_ok=True)
     socket_path.unlink(missing_ok=True)
 
-    time.sleep(8.0)
+    payload_text = "|".join(
+        [
+            args.backend or "",
+            args.model or "",
+            args.compute_type or "",
+            args.device or "",
+            "true" if args.vad_filter else "false",
+        ]
+    )
 
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(str(socket_path))
@@ -49,7 +56,7 @@ def main() -> int:
                 if req.get("type") == "ping":
                     payload = {"type": "ready", "id": req.get("id")}
                 else:
-                    payload = {"type": "result", "id": req.get("id"), "text": "slow daemon ok"}
+                    payload = {"type": "result", "id": req.get("id"), "text": payload_text}
                 conn.sendall((json.dumps(payload) + "\n").encode("utf-8"))
                 return 0
 

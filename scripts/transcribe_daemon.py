@@ -14,13 +14,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from wisper_cli import AppError, load_model, transcribe_with_model
+from wisper_cli import AppError, DEFAULT_BACKEND, load_model, transcribe_with_model
+from wisper_cli import _default_compute_type, _default_model_name
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Persistent transcription daemon.")
-    parser.add_argument("--model", default="small")
-    parser.add_argument("--compute-type", default="int8")
+    parser.add_argument("--backend", choices=["parakeet", "whisper"], default=DEFAULT_BACKEND)
+    parser.add_argument("--model")
+    parser.add_argument("--compute-type")
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
         "--vad-filter",
@@ -121,7 +123,9 @@ def main() -> int:
         socket_path.unlink(missing_ok=True)
 
     try:
-        model = load_model(args.model, args.compute_type, args.device, verbose=False)
+        model_name = args.model or _default_model_name(args.backend)
+        compute_type = args.compute_type or _default_compute_type(args.backend)
+        model = load_model(args.backend, model_name, compute_type, args.device, verbose=False)
     except AppError as exc:
         print(str(exc), file=sys.stderr, flush=True)
         return 1
