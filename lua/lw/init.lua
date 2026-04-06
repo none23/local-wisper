@@ -29,6 +29,7 @@ local state = {
   request_busy = false,
   request_id = 0,
   pending_request_id = nil,
+  pending_audio_path = nil,
   request_channel = nil,
   daemon_job = nil,
   daemon_start_error = nil,
@@ -75,6 +76,18 @@ local function bootstrap_python_bin()
   return "python3"
 end
 
+local function repo_venv_python()
+  local _, repo_root = daemon_script_and_repo_root()
+  if not repo_root then
+    return nil
+  end
+  local repo_python = repo_root .. "/.venv/bin/python"
+  if vim.fn.executable(repo_python) == 1 then
+    return repo_python
+  end
+  return nil
+end
+
 local function resolve_python_bin()
   if M.config.python_bin and M.config.python_bin ~= "" then
     return M.config.python_bin
@@ -83,13 +96,10 @@ local function resolve_python_bin()
     return state.resolved_python
   end
 
-  local _, repo_root = daemon_script_and_repo_root()
-  if repo_root then
-    local repo_venv = repo_root .. "/.venv/bin/python"
-    if vim.fn.executable(repo_venv) == 1 then
-      state.resolved_python = repo_venv
-      return repo_venv
-    end
+  local repo_python = repo_venv_python()
+  if repo_python then
+    state.resolved_python = repo_python
+    return repo_python
   end
 
   local venv_python = default_venv_python()
@@ -161,10 +171,18 @@ local function close_request_channel()
   state.request_channel = nil
 end
 
+local function delete_audio_file(audio_path)
+  if not audio_path or audio_path == "" then
+    return
+  end
+  pcall(vim.fn.delete, audio_path)
+end
+
 local function clear_request_state()
   close_request_channel()
   state.request_busy = false
   state.pending_request_id = nil
+  state.pending_audio_path = nil
 end
 
 function M.setup(opts)
@@ -202,6 +220,16 @@ function M.install_deps(cb)
   local venv_python = default_venv_python()
   local bootstrap_python = bootstrap_python_bin()
   vim.fn.mkdir(vim.fn.fnamemodify(venv_dir, ":h"), "p")
+
+  local repo_python = repo_venv_python()
+  if repo_python and repo_python ~= venv_python then
+    state.resolved_python = repo_python
+    vim.notify("lw.nvim: using existing repo Python environment", vim.log.levels.INFO)
+    if cb then
+      cb(true)
+    end
+    return
+  end
 
   local cmd = vim.fn.shellescape(bootstrap_python)
     .. " -m venv "
@@ -397,7 +425,12 @@ local function handle_daemon_message(line)
     return
   end
 
+  local audio_path = state.pending_audio_path
   clear_request_state()
+  delete_audio_file(audio_path)
+  if state.audio_path == audio_path then
+    state.audio_path = nil
+  end
 
   if msg.type == "result" and type(msg.text) == "string" and msg.text ~= "" then
     add_text_below_cursor(msg.text)
@@ -451,6 +484,7 @@ local function send_transcribe_request(audio_path, attempt)
 
   state.request_id = state.request_id + 1
   state.pending_request_id = state.request_id
+  state.pending_audio_path = audio_path
 
   local ok, chan = pcall(vim.fn.sockconnect, "pipe", state.daemon_socket_path, {
     rpc = false,

@@ -1063,6 +1063,17 @@ def _save_audio_copy(audio_path: Path) -> Path | None:
     return keep_path
 
 
+def _cleanup_recording_audio(audio_path: Path, *, keep_audio: bool) -> Path | None:
+    kept_audio: Path | None = None
+    if keep_audio and audio_path.exists():
+        kept_audio = _save_audio_copy(audio_path)
+
+    if (not keep_audio or kept_audio is not None) and audio_path.exists():
+        audio_path.unlink()
+
+    return kept_audio
+
+
 def _cleanup_sway_state(state_path: Path, state: dict | None, *, keep_audio: bool) -> Path | None:
     kept_audio: Path | None = None
     audio_path = None
@@ -1442,10 +1453,9 @@ def cmd_record(args: argparse.Namespace) -> int:
                         _status("No speech detected.")
                         _status_done()
 
-            if args.keep_audio and audio_path.exists():
-                keep_path = _save_audio_copy(audio_path)
-                if keep_path is not None:
-                    print(f"Saved audio to {keep_path}", file=sys.stderr)
+            keep_path = _cleanup_recording_audio(audio_path, keep_audio=args.keep_audio)
+            if keep_path is not None:
+                print(f"Saved audio to {keep_path}", file=sys.stderr)
 
             _status("Press Enter to start recording again. Press Ctrl+C to exit.")
             try:

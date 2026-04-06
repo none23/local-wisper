@@ -33,6 +33,7 @@ local cases = {
 }
 
 for _, case in ipairs(cases) do
+  local audio_path_log = tmp_root .. "/audio-path-" .. case.backend
   lw.setup({
     python_bin = repo_root .. "/.venv/bin/python",
     preload_on_setup = false,
@@ -44,8 +45,9 @@ for _, case in ipairs(cases) do
     recorder_cmd = {
       "sh",
       "-c",
-      "dd if=/dev/zero bs=4096 count=1 of=\"$1\" >/dev/null 2>&1; sleep 60",
+      "printf '%s' \"$1\" > \"$2\"; dd if=/dev/zero bs=4096 count=1 of=\"$1\" >/dev/null 2>&1; sleep 60",
       "lw-test-recorder",
+      audio_path_log,
     },
   })
 
@@ -73,6 +75,15 @@ for _, case in ipairs(cases) do
 
   if not inserted then
     error("expected transcript insertion for " .. expected)
+  end
+
+  local recorded_path = vim.fn.readfile(audio_path_log)[1]
+  local deleted = vim.wait(2000, function()
+    return vim.fn.filereadable(recorded_path) == 0
+  end, 50)
+
+  if not deleted then
+    error("expected recorded audio cleanup for " .. expected .. ": " .. recorded_path)
   end
 end
 
