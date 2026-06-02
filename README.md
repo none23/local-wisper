@@ -94,6 +94,7 @@ python wisper_cli.py --backend whisper --model small --compute-type int8 --devic
 - Install `lw` first:
   - `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
   - `./install.sh`
+- `install.sh` also creates `~/.config/local-wisper/env` and `~/.config/local-wisper/glossary.txt` if they do not already exist. Existing files are left untouched.
 - The Sway-specific wrapper now lives in your Sway config repo:
   - `swaywm-config/sway/scripts/local-wisper.sh`
 - The sample Sway config in this workspace preloads the daemon on startup and binds `Mod+\`` to:
