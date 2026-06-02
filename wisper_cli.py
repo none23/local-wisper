@@ -24,10 +24,22 @@ import tty
 import wave
 from pathlib import Path
 
+import requests
 
 REPO_ROOT = Path(__file__).resolve().parent
 _CUDA_RUNTIME_READY = False
 DEFAULT_BACKEND = "parakeet"
+DEFAULT_POST_PROCESS_PROMPT = (
+    "You are cleaning up a speech-to-text transcript for direct insertion into an editor. "
+    "The transcript most likely refers to full-stack web development, including TypeScript, "
+    "JavaScript, React, Next.js, Node.js, APIs, databases, CSS, command-line tools, file names, "
+    "errors, and code. Preserve the user's meaning. Fix punctuation, capitalization, spacing, "
+    "and obvious speech-recognition mistakes, especially web development terms. "
+    "If English words are accidentally written in the wrong alphabet, especially Cyrillic phonetic "
+    "spellings of English words, transliterate and normalize them back to intended English text. "
+    "If a correction glossary is provided, use it for likely intended terms and recurring misheard phrases. "
+    "Do not add new facts. If a phrase is ambiguous, leave it unchanged. Return only the cleaned text."
+)
 DEFAULT_MODELS = {
     "parakeet": "nvidia/parakeet-tdt-0.6b-v3",
     "whisper": "small",
@@ -224,6 +236,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--type-output",
         action="store_true",
         help="Type the final transcript into the focused window with wtype instead of copying it.",
+    )
+    parser.add_argument(
+        "--post-process-model",
+        help="OpenAI text model used to clean up the final transcript before delivery.",
+    )
+    parser.add_argument(
+        "--post-process-prompt",
+        default=DEFAULT_POST_PROCESS_PROMPT,
+        help="Instruction prompt for transcript post-processing.",
+    )
+    parser.add_argument(
+        "--post-process-glossary-file",
+        help="Path to an extra correction glossary file appended to the post-processing prompt.",
+    )
+    parser.add_argument(
+        "--post-process-timeout",
+        type=float,
+        default=20.0,
+        help="Seconds to wait for transcript post-processing (default: 20).",
     )
     return parser
 
@@ -849,6 +880,135 @@ def deliver_text(text: str, *, type_output: bool) -> bool:
     return copy_to_clipboard(text)
 
 
+def _openai_api_key() -> str:
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise AppError("OPENAI_API_KEY is required for transcript post-processing.")
+    return api_key
+
+
+def _extract_response_text(payload: dict) -> str:
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str):
+        return output_text.strip()
+
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return ""
+
+    parts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for content_item in content:
+            if not isinstance(content_item, dict):
+                continue
+            text = content_item.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+    return "\n".join(parts).strip()
+
+
+def _response_incomplete_reason(payload: dict) -> str | None:
+    if payload.get("status") != "incomplete":
+        return None
+    details = payload.get("incomplete_details")
+    if isinstance(details, dict):
+        reason = details.get("reason")
+        if isinstance(reason, str) and reason:
+            return reason
+    return "unknown"
+
+
+def post_process_text(
+    text: str,
+    *,
+    model_name: str | None,
+    prompt: str,
+    glossary_file: str | None,
+    timeout: float,
+    verbose: bool,
+) -> str:
+    if not text or not model_name:
+        return text
+
+    api_key = _openai_api_key()
+    full_prompt = prompt
+    if glossary_file:
+        try:
+            extra_glossary = Path(glossary_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise AppError(f"Could not read post-processing glossary file: {exc}") from exc
+        if extra_glossary:
+            full_prompt += "\n\nAdditional user correction glossary:\n" + extra_glossary
+
+    payload = {
+        "model": model_name,
+        "instructions": full_prompt,
+        "input": text,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    organization = os.environ.get("OPENAI_ORG_ID") or os.environ.get("OPENAI_ORGANIZATION")
+    project = os.environ.get("OPENAI_PROJECT_ID")
+    if organization:
+        headers["OpenAI-Organization"] = organization
+    if project:
+        headers["OpenAI-Project"] = project
+
+    t0 = time.perf_counter()
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers=headers,
+            json=payload,
+            timeout=max(timeout, 1.0),
+        )
+    except requests.RequestException as exc:
+        raise AppError(f"Transcript post-processing request failed: {exc}") from exc
+
+    if response.status_code >= 400:
+        detail = response.text.strip()
+        raise AppError(f"Transcript post-processing failed ({response.status_code}): {detail}")
+
+    try:
+        response_payload = response.json()
+    except ValueError as exc:
+        raise AppError(f"Transcript post-processing returned invalid JSON: {exc}") from exc
+
+    incomplete_reason = _response_incomplete_reason(response_payload)
+    if incomplete_reason is not None:
+        raise AppError(f"Transcript post-processing returned incomplete output ({incomplete_reason})")
+
+    processed = _extract_response_text(response_payload)
+    if not processed:
+        raise AppError("Transcript post-processing returned empty text.")
+    _log(verbose, f"Transcript post-processing took {time.perf_counter() - t0:.2f}s")
+    return processed
+
+
+def maybe_post_process_text(text: str, args: argparse.Namespace) -> str:
+    if not getattr(args, "post_process_model", None):
+        return text
+    try:
+        return post_process_text(
+            text,
+            model_name=args.post_process_model,
+            prompt=args.post_process_prompt,
+            glossary_file=args.post_process_glossary_file,
+            timeout=args.post_process_timeout,
+            verbose=args.verbose,
+        )
+    except AppError as exc:
+        print(f"Warning: {exc}; using raw transcript.", file=sys.stderr)
+        return text
+
+
 def _socket_is_live(socket_path: Path) -> bool:
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -1256,6 +1416,7 @@ def cmd_sway_stop(args: argparse.Namespace) -> int:
         print("No speech detected.", file=sys.stderr)
         return 0
 
+    text = maybe_post_process_text(text, args)
     print(text)
     if not deliver_text(text, type_output=args.type_output):
         if args.type_output:
@@ -1429,6 +1590,7 @@ def cmd_record(args: argparse.Namespace) -> int:
                     )
 
                 if text:
+                    text = maybe_post_process_text(text, args)
                     if args.live:
                         print("\nFinal transcript:")
                         print(text)
