@@ -14,7 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from wisper_cli import AppError, DEFAULT_BACKEND, load_model, transcribe_with_model
+from wisper_cli import (
+    AppError,
+    DEFAULT_BACKEND,
+    DEFAULT_POST_PROCESS_PROMPT,
+    load_model,
+    post_process_text,
+    transcribe_with_model,
+)
 from wisper_cli import _default_compute_type, _default_model_name
 
 
@@ -36,6 +43,37 @@ def build_parser() -> argparse.ArgumentParser:
 def emit(conn_file, payload: dict) -> None:
     conn_file.write((json.dumps(payload, ensure_ascii=True) + "\n").encode("utf-8"))
     conn_file.flush()
+
+
+def _post_process_config(req: dict) -> dict | None:
+    config = req.get("post_process")
+    if not isinstance(config, dict):
+        return None
+
+    model_name = config.get("model")
+    if not isinstance(model_name, str) or not model_name.strip():
+        return None
+
+    prompt = config.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        prompt = DEFAULT_POST_PROCESS_PROMPT
+
+    glossary_file = config.get("glossary_file")
+    if not isinstance(glossary_file, str) or not glossary_file.strip():
+        glossary_file = None
+
+    timeout = config.get("timeout", 20.0)
+    try:
+        timeout = float(timeout)
+    except (TypeError, ValueError):
+        timeout = 20.0
+
+    return {
+        "model_name": model_name.strip(),
+        "prompt": prompt,
+        "glossary_file": glossary_file,
+        "timeout": timeout,
+    }
 
 
 def handle_request(req: dict, model, vad_filter: bool) -> dict:
@@ -61,7 +99,17 @@ def handle_request(req: dict, model, vad_filter: bool) -> dict:
             vad_filter=vad_filter,
         )
         if text:
-            return {"type": "result", "id": req_id, "text": text}
+            warning = None
+            post_process = _post_process_config(req)
+            if post_process is not None:
+                try:
+                    text = post_process_text(text, verbose=False, **post_process)
+                except AppError as exc:
+                    warning = f"post-processing skipped: {exc}"
+            payload = {"type": "result", "id": req_id, "text": text}
+            if warning:
+                payload["warning"] = warning
+            return payload
         return {"type": "no_speech", "id": req_id}
     except AppError as exc:
         return {"type": "error", "id": req_id, "error": str(exc)}

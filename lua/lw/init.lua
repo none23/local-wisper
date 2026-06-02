@@ -13,6 +13,10 @@ M.config = {
   sample_rate = 16000,
   recorder_cmd = nil,
   preload_on_setup = true,
+  post_process_model = nil,
+  post_process_prompt = nil,
+  post_process_glossary_file = nil,
+  post_process_timeout = 20,
 }
 
 local state = {
@@ -183,6 +187,27 @@ local function clear_request_state()
   state.request_busy = false
   state.pending_request_id = nil
   state.pending_audio_path = nil
+end
+
+local function post_process_config()
+  if type(M.config.post_process_model) ~= "string" or M.config.post_process_model == "" then
+    return nil
+  end
+
+  local config = {
+    model = M.config.post_process_model,
+    timeout = M.config.post_process_timeout or 20,
+  }
+
+  if type(M.config.post_process_prompt) == "string" and M.config.post_process_prompt ~= "" then
+    config.prompt = M.config.post_process_prompt
+  end
+
+  if type(M.config.post_process_glossary_file) == "string" and M.config.post_process_glossary_file ~= "" then
+    config.glossary_file = vim.fn.expand(M.config.post_process_glossary_file)
+  end
+
+  return config
 end
 
 function M.setup(opts)
@@ -434,6 +459,10 @@ local function handle_daemon_message(line)
 
   if msg.type == "result" and type(msg.text) == "string" and msg.text ~= "" then
     add_text_below_cursor(msg.text)
+    if type(msg.warning) == "string" and msg.warning ~= "" then
+      status("LW: inserted transcript; " .. msg.warning, "WarningMsg")
+      return
+    end
     status("LW: inserted transcript", "Question")
     return
   end
@@ -519,11 +548,17 @@ local function send_transcribe_request(audio_path, attempt)
   state.request_busy = true
   state.request_channel = chan
 
-  local payload = vim.json.encode({
+  local payload_data = {
     type = "transcribe",
     id = state.pending_request_id,
     audio_path = audio_path,
-  })
+  }
+  local post_process = post_process_config()
+  if post_process then
+    payload_data.post_process = post_process
+  end
+
+  local payload = vim.json.encode(payload_data)
   vim.fn.chansend(chan, payload .. "\n")
   pcall(vim.fn.chanclose, chan, "stdin")
 

@@ -56,7 +56,17 @@ def main() -> int:
                 if req.get("type") == "ping":
                     payload = {"type": "ready", "id": req.get("id")}
                 else:
-                    payload = {"type": "result", "id": req.get("id"), "text": payload_text}
+                    text = payload_text
+                    post_process = req.get("post_process")
+                    if isinstance(post_process, dict):
+                        text += "|post:" + "|".join(
+                            [
+                                str(post_process.get("model") or ""),
+                                str(post_process.get("glossary_file") or ""),
+                                str(post_process.get("timeout") or ""),
+                            ]
+                        )
+                    payload = {"type": "result", "id": req.get("id"), "text": text}
                 conn.sendall((json.dumps(payload) + "\n").encode("utf-8"))
                 return 0
 
