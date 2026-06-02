@@ -25,6 +25,8 @@ In normal mode, run `:LW` (or map it) to:
       device = "cpu",
       vad_filter = false,
       sample_rate = 16000,
+      post_process_model = "gpt-5.4-nano",
+      post_process_glossary_file = "~/.config/local-wisper/glossary.txt",
     })
 
     vim.keymap.set("n", "<leader>lw", "<cmd>LW<CR>", { desc = "Local Speech" })
@@ -64,6 +66,9 @@ You can also trigger install manually:
 - `sample_rate` (number): recording sample rate. Default: `16000`.
 - `recorder_cmd` (string[]|nil): custom recording command prefix. Plugin appends output wav path.
 - `preload_on_setup` (boolean): start daemon/model warmup on `setup()`. Default: `true`.
+- `post_process_model` (string|nil): OpenAI text model used to clean up the final transcript before insertion. Disabled by default.
+- `post_process_glossary_file` (string|nil): local glossary file appended to the post-processing prompt.
+- `post_process_timeout` (number): seconds to wait for post-processing. Default: `20`.
 
 ## Performance notes
 - The plugin keeps a detached Python daemon with a preloaded model, so repeated `:LW` calls and new Neovim sessions avoid model reload overhead.
@@ -75,6 +80,7 @@ You can also trigger install manually:
 ## Usage
 - `:LW`: toggle recording/transcription flow.
 - while recording, press `Enter` to stop and insert transcript.
+- if `post_process_model` is configured, the final local transcript is cleaned up before insertion; failures fall back to the raw transcript.
 - `lw preload`: start the persistent daemon and preload the model for non-Neovim integrations.
 - `lw sway-start` / `lw sway-stop`: start or stop a detached recording session intended for Sway keybindings.
 
@@ -88,6 +94,7 @@ python wisper_cli.py --backend whisper --model small --compute-type int8 --devic
 - Install `lw` first:
   - `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
   - `./install.sh`
+- `install.sh` also creates `~/.config/local-wisper/env` and `~/.config/local-wisper/glossary.txt` if they do not already exist. Existing files are left untouched.
 - The Sway-specific wrapper now lives in your Sway config repo:
   - `swaywm-config/sway/scripts/local-wisper.sh`
 - The sample Sway config in this workspace preloads the daemon on startup and binds `Mod+\`` to:
@@ -96,6 +103,7 @@ python wisper_cli.py --backend whisper --model small --compute-type int8 --devic
   - cancel on `Escape`
 - The stop action transcribes through the persistent daemon and types the final text into the focused window with `wtype`.
 - Set `LW_OUTPUT_MODE=clipboard` in the wrapper environment if you want the old clipboard behavior back.
+- Set `LW_POST_PROCESS_MODEL=gpt-5.4-nano` in `~/.config/local-wisper/env` to clean up the final local transcript before delivery. The prompt is conservative, assumes full-stack web development context, normalizes accidental wrong-alphabet phonetic spellings such as Cyrillic-rendered English, and can apply a local correction glossary via `LW_POST_PROCESS_GLOSSARY_FILE`.
 
 ## Troubleshooting
 - `failed to start recorder`:

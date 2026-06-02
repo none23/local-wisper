@@ -29,6 +29,9 @@ local cases = {
     compute_type = "int8",
     device = "cpu",
     vad_filter = true,
+    post_process_model = "gpt-5.4-nano",
+    post_process_glossary_file = "~/.config/local-wisper/glossary.txt",
+    post_process_timeout = 20.5,
   },
 }
 
@@ -42,6 +45,9 @@ for _, case in ipairs(cases) do
     compute_type = case.compute_type,
     device = case.device,
     vad_filter = case.vad_filter,
+    post_process_model = case.post_process_model or "",
+    post_process_glossary_file = case.post_process_glossary_file or "",
+    post_process_timeout = case.post_process_timeout or 20,
     recorder_cmd = {
       "sh",
       "-c",
@@ -62,6 +68,15 @@ for _, case in ipairs(cases) do
     case.device,
     case.vad_filter and "true" or "false",
   }, "|")
+  if case.post_process_model then
+    expected = expected
+      .. "|post:"
+      .. case.post_process_model
+      .. "|"
+      .. vim.fn.expand(case.post_process_glossary_file)
+      .. "|"
+      .. tostring(case.post_process_timeout)
+  end
 
   local inserted = vim.wait(5000, function()
     local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
