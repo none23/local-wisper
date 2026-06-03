@@ -108,6 +108,15 @@ _SPOKEN_DECIMAL_RE = re.compile(
     rf"[\s-]+point[\s-]+(?P<fraction>(?:{_DIGIT_WORD_PATTERN})(?:[\s-]+(?:{_DIGIT_WORD_PATTERN}))*)\b",
     re.IGNORECASE,
 )
+_SENTENCE_END_RE = re.compile(r"[!?]|(?<!\d)\.|\.(?!\d)")
+_INITIAL_PRONOUN_I_RE = re.compile(
+    r"^(\s*)i(?=\b\s+(?:"
+    r"mean|think|guess|believe|know|want|need|will|would|can|could|should|"
+    r"am|was|have|had|do|did|feel|see|understand|"
+    r"don't|dont|can't|cant|won't|wont|wouldn't|wouldnt|shouldn't|shouldnt"
+    r")\b|'(?:m|ve|ll|d)\b|$)",
+    re.IGNORECASE,
+)
 
 
 class AppError(Exception):
@@ -1015,6 +1024,29 @@ def normalize_spoken_numerics(text: str) -> str:
     return _NUMERIC_PREFIX_RE.sub(replace_numeric_prefix, text)
 
 
+def normalize_short_statement_style(text: str) -> str:
+    if "?" in text or len(_SENTENCE_END_RE.findall(text)) >= 2:
+        return text
+
+    stripped = text.rstrip()
+    suffix = text[len(stripped) :]
+    if stripped.endswith("."):
+        stripped = stripped[:-1].rstrip()
+
+    stripped = _INITIAL_PRONOUN_I_RE.sub(r"\1I", stripped)
+    stripped = re.sub(r"^(\s*)A\b", r"\1a", stripped)
+    stripped = re.sub(
+        r"^(\s*)([A-Z][a-z]+)(?=\b|')",
+        lambda match: match.group(1) + match.group(2).lower(),
+        stripped,
+    )
+    return stripped + suffix
+
+
+def normalize_final_transcript(text: str) -> str:
+    return normalize_short_statement_style(normalize_spoken_numerics(text))
+
+
 def _word_count(text: str) -> int:
     return len(re.findall(r"\b[\w']+\b", text))
 
@@ -1070,7 +1102,7 @@ def post_process_text(
     raw_word_count = _word_count(text)
     text = normalize_spoken_numerics(text)
     if not model_name or raw_word_count < 6:
-        return text
+        return normalize_short_statement_style(text)
 
     api_key = _openai_api_key()
     full_prompt = prompt
@@ -1126,12 +1158,12 @@ def post_process_text(
     if not processed:
         raise AppError("Transcript post-processing returned empty text.")
     _log(verbose, f"Transcript post-processing took {time.perf_counter() - t0:.2f}s")
-    return normalize_spoken_numerics(processed)
+    return normalize_final_transcript(processed)
 
 
 def maybe_post_process_text(text: str, args: argparse.Namespace) -> str:
     if not getattr(args, "post_process_model", None):
-        return normalize_spoken_numerics(text)
+        return normalize_final_transcript(text)
     try:
         return post_process_text(
             text,

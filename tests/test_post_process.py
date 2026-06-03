@@ -7,7 +7,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from wisper_cli import AppError, maybe_post_process_text, normalize_spoken_numerics, post_process_text
+from wisper_cli import (
+    AppError,
+    maybe_post_process_text,
+    normalize_final_transcript,
+    normalize_spoken_numerics,
+    post_process_text,
+)
 
 
 class NumericPostProcessTest(unittest.TestCase):
@@ -84,6 +90,37 @@ class NumericPostProcessTest(unittest.TestCase):
     def test_numeric_cleanup_runs_without_model(self) -> None:
         args = argparse.Namespace(post_process_model=None)
         self.assertEqual(maybe_post_process_text("numeric three", args), "3")
+
+    def test_short_statement_style_removes_sentence_case_and_final_period(self) -> None:
+        self.assertEqual(normalize_final_transcript("Fair point."), "fair point")
+        self.assertEqual(
+            normalize_final_transcript("Because it will be simpler this way."),
+            "because it will be simpler this way",
+        )
+        self.assertEqual(normalize_final_transcript("Version zero point one."), "version 0.1")
+        self.assertEqual(normalize_final_transcript("A fair point."), "a fair point")
+        self.assertEqual(normalize_final_transcript("i mean"), "I mean")
+        self.assertEqual(normalize_final_transcript("i think so"), "I think so")
+        self.assertEqual(normalize_final_transcript("i'm sure"), "I'm sure")
+        self.assertEqual(normalize_final_transcript("I mean."), "I mean")
+        self.assertEqual(normalize_final_transcript("It's fine."), "it's fine")
+
+    def test_short_statement_style_preserves_questions_and_two_sentence_text(self) -> None:
+        self.assertEqual(
+            normalize_final_transcript("That's a fair point. Let's go with this approach."),
+            "That's a fair point. Let's go with this approach.",
+        )
+        self.assertEqual(normalize_final_transcript("Use option 1. Then option 2."), "Use option 1. Then option 2.")
+        self.assertEqual(normalize_final_transcript("How can we solve it?"), "How can we solve it?")
+
+    def test_short_statement_style_preserves_acronyms_and_identifiers(self) -> None:
+        self.assertEqual(normalize_final_transcript("API request."), "API request")
+        self.assertEqual(normalize_final_transcript("Use API."), "use API")
+        self.assertEqual(normalize_final_transcript("use API"), "use API")
+        self.assertEqual(normalize_final_transcript("for i in items"), "for i in items")
+        self.assertEqual(normalize_final_transcript("i in items"), "i in items")
+        self.assertEqual(normalize_final_transcript("TypeScript type."), "TypeScript type")
+        self.assertEqual(normalize_final_transcript("JavaScript module."), "JavaScript module")
 
 
 if __name__ == "__main__":
