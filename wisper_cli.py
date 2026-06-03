@@ -37,6 +37,9 @@ DEFAULT_POST_PROCESS_PROMPT = (
     "errors, and code. Preserve the user's meaning. Fix punctuation, capitalization, spacing, "
     "and obvious speech-recognition mistakes, especially web development terms. "
     "Preserve the transcript's original language. Never translate complete coherent non-English text into English. "
+    "Never translate English or code-heavy transcripts into another language. If the transcript mixes Latin-script "
+    "English/code with wrong-alphabet fragments, keep the Latin-script English/code as English and only normalize "
+    "the wrong-alphabet fragments. "
     "If English words are accidentally written in the wrong alphabet, especially Cyrillic phonetic "
     "spellings of English words, transliterate and normalize them back to intended English text only when the text "
     "is otherwise nonsensical in that language or clearly resembles English/code typed with the wrong keyboard layout. "
@@ -123,6 +126,32 @@ _INITIAL_PRONOUN_I_RE = re.compile(
 
 def _has_non_latin_letters(text: str) -> bool:
     return any(char.isalpha() and not (("A" <= char <= "Z") or ("a" <= char <= "z")) for char in text)
+
+
+def _script_letter_counts(text: str) -> tuple[int, int]:
+    latin = 0
+    non_latin = 0
+    for char in text:
+        if not char.isalpha():
+            continue
+        if ("A" <= char <= "Z") or ("a" <= char <= "z"):
+            latin += 1
+        else:
+            non_latin += 1
+    return latin, non_latin
+
+
+def _looks_like_unwanted_non_latin_translation(source: str, processed: str) -> bool:
+    source_latin, source_non_latin = _script_letter_counts(source)
+    processed_latin, processed_non_latin = _script_letter_counts(processed)
+    if source_latin == 0 or processed_non_latin == 0:
+        return False
+
+    allowed_non_latin_growth = max(6, source_non_latin * 2)
+    return (
+        processed_non_latin > processed_latin
+        and processed_non_latin > source_non_latin + allowed_non_latin_growth
+    )
 
 
 class AppError(Exception):
@@ -1035,6 +1064,8 @@ def normalize_short_statement_style(text: str) -> str:
         return text
     if "?" in text or len(_SENTENCE_END_RE.findall(text)) >= 2:
         return text
+    if _word_count(text) > 10:
+        return normalize_long_statement_style(text)
 
     stripped = text.rstrip()
     suffix = text[len(stripped) :]
@@ -1048,6 +1079,21 @@ def normalize_short_statement_style(text: str) -> str:
         lambda match: match.group(1) + match.group(2).lower(),
         stripped,
     )
+    return stripped + suffix
+
+
+def normalize_long_statement_style(text: str) -> str:
+    stripped = text.rstrip()
+    suffix = text[len(stripped) :]
+
+    stripped = _INITIAL_PRONOUN_I_RE.sub(r"\1I", stripped)
+    stripped = re.sub(
+        r"^(\s*)([a-z]+)(?=\b|')",
+        lambda match: match.group(1) + match.group(2).capitalize(),
+        stripped,
+    )
+    if stripped and not _SENTENCE_END_RE.search(stripped[-1]):
+        stripped += "."
     return stripped + suffix
 
 
@@ -1166,6 +1212,9 @@ def post_process_text(
     if not processed:
         raise AppError("Transcript post-processing returned empty text.")
     _log(verbose, f"Transcript post-processing took {time.perf_counter() - t0:.2f}s")
+    if _looks_like_unwanted_non_latin_translation(text, processed):
+        _log(verbose, "Transcript post-processing introduced likely non-Latin translation; using local cleanup.")
+        return normalize_final_transcript(text)
     return normalize_final_transcript(processed)
 
 
