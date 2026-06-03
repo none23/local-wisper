@@ -9,6 +9,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import select
 import shutil
 import signal
@@ -38,6 +39,8 @@ DEFAULT_POST_PROCESS_PROMPT = (
     "If English words are accidentally written in the wrong alphabet, especially Cyrillic phonetic "
     "spellings of English words, transliterate and normalize them back to intended English text. "
     "If a correction glossary is provided, use it for likely intended terms and recurring misheard phrases. "
+    "Convert spoken decimal numbers like 'zero point one' to '0.1'. "
+    "Convert explicit phrases like 'numeric one' or 'numeric zero' to literal digits. "
     "Do not add new facts. If a phrase is ambiguous, leave it unchanged. Return only the cleaned text."
 )
 DEFAULT_MODELS = {
@@ -48,6 +51,63 @@ DEFAULT_COMPUTE_TYPES = {
     "parakeet": "float32",
     "whisper": "int8",
 }
+_DIGIT_WORDS = {
+    "zero": 0,
+    "oh": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+}
+_TEEN_WORDS = {
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+}
+_TENS_WORDS = {
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
+}
+_DIGIT_WORD_PATTERN = "|".join(sorted(map(re.escape, _DIGIT_WORDS), key=len, reverse=True))
+_TEEN_WORD_PATTERN = "|".join(sorted(map(re.escape, _TEEN_WORDS), key=len, reverse=True))
+_TENS_WORD_PATTERN = "|".join(sorted(map(re.escape, _TENS_WORDS), key=len, reverse=True))
+_BASE_NUMBER_PATTERN = (
+    rf"(?:{_TENS_WORD_PATTERN})(?:[\s-]+(?:{_DIGIT_WORD_PATTERN}))?"
+    rf"|(?:{_TEEN_WORD_PATTERN})"
+    rf"|(?:{_DIGIT_WORD_PATTERN})"
+)
+_NUMBER_PHRASE_PATTERN = (
+    rf"(?:{_DIGIT_WORD_PATTERN})[\s-]+hundred"
+    rf"(?:[\s-]+and)?(?:[\s-]+(?:{_BASE_NUMBER_PATTERN}))?"
+    rf"|(?:{_BASE_NUMBER_PATTERN})"
+)
+_NUMERIC_PREFIX_RE = re.compile(
+    rf"\bnumeric[\s-]+(?P<number>(?:{_NUMBER_PHRASE_PATTERN}))\b",
+    re.IGNORECASE,
+)
+_SPOKEN_DECIMAL_RE = re.compile(
+    rf"\b(?P<integer>(?:{_NUMBER_PHRASE_PATTERN}))"
+    rf"[\s-]+point[\s-]+(?P<fraction>(?:{_DIGIT_WORD_PATTERN})(?:[\s-]+(?:{_DIGIT_WORD_PATTERN}))*)\b",
+    re.IGNORECASE,
+)
 
 
 class AppError(Exception):
@@ -887,6 +947,78 @@ def _openai_api_key() -> str:
     return api_key
 
 
+def _parse_spoken_number(text: str) -> int | None:
+    words = re.split(r"[\s-]+", text.lower().strip())
+    current = 0
+    saw_number = False
+    previous_kind: str | None = None
+
+    for index, word in enumerate(words):
+        if word == "and":
+            if previous_kind != "hundred" or index == len(words) - 1:
+                return None
+            previous_kind = "and"
+            continue
+        if word in _DIGIT_WORDS:
+            if previous_kind in {"digit", "teen"}:
+                return None
+            current += _DIGIT_WORDS[word]
+            saw_number = True
+            previous_kind = "digit"
+        elif word in _TEEN_WORDS:
+            if previous_kind in {"digit", "teen", "tens"}:
+                return None
+            current += _TEEN_WORDS[word]
+            saw_number = True
+            previous_kind = "teen"
+        elif word in _TENS_WORDS:
+            if previous_kind in {"digit", "teen", "tens"}:
+                return None
+            current += _TENS_WORDS[word]
+            saw_number = True
+            previous_kind = "tens"
+        elif word == "hundred" and saw_number:
+            if previous_kind != "digit":
+                return None
+            current *= 100
+            previous_kind = "hundred"
+        else:
+            return None
+
+    if not saw_number:
+        return None
+    return current
+
+
+def normalize_spoken_numerics(text: str) -> str:
+    def replace_decimal(match: re.Match[str]) -> str:
+        integer = _parse_spoken_number(match.group("integer"))
+        if integer is None:
+            return match.group(0)
+
+        fraction_digits = []
+        for word in re.split(r"[\s-]+", match.group("fraction").lower().strip()):
+            digit = _DIGIT_WORDS.get(word)
+            if digit is None:
+                return match.group(0)
+            fraction_digits.append(str(digit))
+
+        return f"{integer}.{''.join(fraction_digits)}"
+
+    def replace_numeric_prefix(match: re.Match[str]) -> str:
+        number = _parse_spoken_number(match.group("number"))
+        if number is None:
+            return match.group(0)
+        return str(number)
+
+    text = _SPOKEN_DECIMAL_RE.sub(replace_decimal, text)
+    return _NUMERIC_PREFIX_RE.sub(replace_numeric_prefix, text)
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w']+\b", text))
+
+
 def _extract_response_text(payload: dict) -> str:
     output_text = payload.get("output_text")
     if isinstance(output_text, str):
@@ -932,7 +1064,12 @@ def post_process_text(
     timeout: float,
     verbose: bool,
 ) -> str:
-    if not text or not model_name:
+    if not text:
+        return text
+
+    raw_word_count = _word_count(text)
+    text = normalize_spoken_numerics(text)
+    if not model_name or raw_word_count < 6:
         return text
 
     api_key = _openai_api_key()
@@ -989,12 +1126,12 @@ def post_process_text(
     if not processed:
         raise AppError("Transcript post-processing returned empty text.")
     _log(verbose, f"Transcript post-processing took {time.perf_counter() - t0:.2f}s")
-    return processed
+    return normalize_spoken_numerics(processed)
 
 
 def maybe_post_process_text(text: str, args: argparse.Namespace) -> str:
     if not getattr(args, "post_process_model", None):
-        return text
+        return normalize_spoken_numerics(text)
     try:
         return post_process_text(
             text,
