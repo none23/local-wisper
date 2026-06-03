@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from wisper_cli import (
     AppError,
+    DEFAULT_POST_PROCESS_PROMPT,
     maybe_post_process_text,
     normalize_final_transcript,
     normalize_spoken_numerics,
@@ -23,6 +24,7 @@ class NumericPostProcessTest(unittest.TestCase):
         self.assertEqual(normalize_spoken_numerics("version twelve point zero"), "version 12.0")
         self.assertEqual(normalize_spoken_numerics("zero point zero five"), "0.05")
         self.assertEqual(normalize_spoken_numerics("one hundred and five point six"), "105.6")
+        self.assertEqual(normalize_final_transcript("zero point one."), "0.1")
 
     def test_numeric_prefix_becomes_literal_number(self) -> None:
         self.assertEqual(normalize_spoken_numerics("numeric one"), "1")
@@ -121,6 +123,16 @@ class NumericPostProcessTest(unittest.TestCase):
         self.assertEqual(normalize_final_transcript("i in items"), "i in items")
         self.assertEqual(normalize_final_transcript("TypeScript type."), "TypeScript type")
         self.assertEqual(normalize_final_transcript("JavaScript module."), "JavaScript module")
+
+    def test_non_latin_transcripts_are_not_restyled_locally(self) -> None:
+        self.assertEqual(normalize_final_transcript("Хорошая мысль."), "Хорошая мысль.")
+        self.assertEqual(normalize_final_transcript("Как это исправить?"), "Как это исправить?")
+        self.assertEqual(normalize_final_transcript("Привет 123."), "Привет 123.")
+
+    def test_default_prompt_preserves_coherent_non_english_text(self) -> None:
+        self.assertIn("Preserve the transcript's original language", DEFAULT_POST_PROCESS_PROMPT)
+        self.assertIn("Never translate complete coherent non-English text into English", DEFAULT_POST_PROCESS_PROMPT)
+        self.assertIn("wrong keyboard layout", DEFAULT_POST_PROCESS_PROMPT)
 
 
 if __name__ == "__main__":

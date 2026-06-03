@@ -36,8 +36,10 @@ DEFAULT_POST_PROCESS_PROMPT = (
     "JavaScript, React, Next.js, Node.js, APIs, databases, CSS, command-line tools, file names, "
     "errors, and code. Preserve the user's meaning. Fix punctuation, capitalization, spacing, "
     "and obvious speech-recognition mistakes, especially web development terms. "
+    "Preserve the transcript's original language. Never translate complete coherent non-English text into English. "
     "If English words are accidentally written in the wrong alphabet, especially Cyrillic phonetic "
-    "spellings of English words, transliterate and normalize them back to intended English text. "
+    "spellings of English words, transliterate and normalize them back to intended English text only when the text "
+    "is otherwise nonsensical in that language or clearly resembles English/code typed with the wrong keyboard layout. "
     "If a correction glossary is provided, use it for likely intended terms and recurring misheard phrases. "
     "Convert spoken decimal numbers like 'zero point one' to '0.1'. "
     "Convert explicit phrases like 'numeric one' or 'numeric zero' to literal digits. "
@@ -117,6 +119,10 @@ _INITIAL_PRONOUN_I_RE = re.compile(
     r")\b|'(?:m|ve|ll|d)\b|$)",
     re.IGNORECASE,
 )
+
+
+def _has_non_latin_letters(text: str) -> bool:
+    return any(char.isalpha() and not (("A" <= char <= "Z") or ("a" <= char <= "z")) for char in text)
 
 
 class AppError(Exception):
@@ -1025,6 +1031,8 @@ def normalize_spoken_numerics(text: str) -> str:
 
 
 def normalize_short_statement_style(text: str) -> str:
+    if _has_non_latin_letters(text):
+        return text
     if "?" in text or len(_SENTENCE_END_RE.findall(text)) >= 2:
         return text
 
