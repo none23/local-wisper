@@ -196,6 +196,49 @@ class NumericPostProcessTest(unittest.TestCase):
             DEFAULT_POST_PROCESS_PROMPT,
         )
         self.assertIn("wrong keyboard layout", DEFAULT_POST_PROCESS_PROMPT)
+        self.assertIn("not as a request to answer", DEFAULT_POST_PROCESS_PROMPT)
+        self.assertIn("do not answer it", DEFAULT_POST_PROCESS_PROMPT)
+
+    def test_post_processing_wraps_question_transcript_as_source_text(self) -> None:
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json() -> dict:
+                return {
+                    "output_text": "How should we wrap the transcript for the model?"
+                }
+
+        old_api_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        transcript = "How should we wrap the transcript for the model?"
+        try:
+            with patch("wisper_cli.requests.post", return_value=FakeResponse()) as post:
+                self.assertEqual(
+                    post_process_text(
+                        transcript,
+                        model_name="gpt-test",
+                        prompt=DEFAULT_POST_PROCESS_PROMPT,
+                        glossary_file=None,
+                        timeout=1.0,
+                        verbose=False,
+                    ),
+                    transcript,
+                )
+
+            payload = post.call_args.kwargs["json"]
+            self.assertIn("not as a request to answer", payload["instructions"])
+            self.assertIn("do not answer it", payload["instructions"])
+            self.assertIn(
+                "<transcript>\n" + transcript + "\n</transcript>",
+                payload["input"],
+            )
+            self.assertNotEqual(transcript, payload["input"])
+        finally:
+            if old_api_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_api_key
 
     def test_post_processing_rejects_non_latin_translation_of_english_input(
         self,
