@@ -61,7 +61,24 @@ fi
 
 if [[ ! -f "${GLOSSARY_PATH}" ]]; then
   cat > "${GLOSSARY_PATH}" <<'EOF'
-Common intended full-stack terms:
+[always]
+dot env -> .env
+package Jason -> package.json
+
+[likely]
+java script -> JavaScript
+next jazz -> Next.js
+next Jess -> Next.js
+next JS -> Next.js
+node jazz -> Node.js
+node Jess -> Node.js
+node JS -> Node.js
+tail wind -> Tailwind
+type script -> TypeScript
+
+[contextual]
+
+[terms]
 OpenAI
 Claude
 Claude Code
@@ -80,19 +97,6 @@ pnpm
 Zod
 Zustand
 .env
-
-Common misrecognitions:
-next jazz -> Next.js
-next Jess -> Next.js
-next JS -> Next.js
-node jazz -> Node.js
-node Jess -> Node.js
-node JS -> Node.js
-tail wind -> Tailwind
-type script -> TypeScript
-java script -> JavaScript
-package Jason -> package.json
-dot env -> .env
 EOF
   chmod 600 "${GLOSSARY_PATH}"
 fi
