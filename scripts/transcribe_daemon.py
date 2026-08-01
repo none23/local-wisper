@@ -18,6 +18,7 @@ from wisper_cli import (
     AppError,
     DEFAULT_BACKEND,
     DEFAULT_POST_PROCESS_PROMPT,
+    local_post_process_text,
     load_model,
     post_process_text,
     transcribe_with_model,
@@ -106,6 +107,12 @@ def handle_request(req: dict, model, vad_filter: bool) -> dict:
                     text = post_process_text(text, verbose=False, **post_process)
                 except AppError as exc:
                     warning = f"post-processing skipped: {exc}"
+                    try:
+                        text = local_post_process_text(
+                            text, post_process.get("glossary_file")
+                        )
+                    except AppError:
+                        pass
             payload = {"type": "result", "id": req_id, "text": text}
             if warning:
                 payload["warning"] = warning
