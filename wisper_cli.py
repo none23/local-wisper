@@ -1352,6 +1352,8 @@ def post_process_text(
         "instructions": full_prompt,
         "input": _post_process_input(text),
     }
+    if model_name == "gpt-5.6-luna":
+        payload["reasoning"] = {"effort": "none"}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
