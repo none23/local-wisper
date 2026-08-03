@@ -1,0 +1,1 @@
+"""Local Wisper application package."""
