@@ -29,7 +29,7 @@ local cases = {
     compute_type = "int8",
     device = "cpu",
     vad_filter = true,
-    post_process_model = "gpt-5.4-nano",
+    post_process_model = "gpt-5.6-luna",
     post_process_glossary_file = "~/.config/local-wisper/glossary.txt",
     post_process_timeout = 20.5,
   },

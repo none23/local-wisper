@@ -370,6 +370,36 @@ class NumericPostProcessTest(unittest.TestCase):
             else:
                 os.environ["OPENAI_API_KEY"] = old_api_key
 
+    def test_luna_post_processing_disables_reasoning(self) -> None:
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json() -> dict:
+                return {"output_text": "This transcript has enough words to process."}
+
+        old_api_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with patch("wisper_cli.requests.post", return_value=FakeResponse()) as post:
+                post_process_text(
+                    "This transcript has enough words to process.",
+                    model_name="gpt-5.6-luna",
+                    prompt="clean",
+                    glossary_file=None,
+                    timeout=1.0,
+                    verbose=False,
+                )
+
+            payload = post.call_args.kwargs["json"]
+            self.assertEqual(payload["model"], "gpt-5.6-luna")
+            self.assertEqual(payload["reasoning"], {"effort": "none"})
+        finally:
+            if old_api_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_api_key
+
     def test_post_processing_rejects_non_latin_translation_of_english_input(
         self,
     ) -> None:

@@ -45,7 +45,7 @@ if [[ ! -f "${ENV_PATH}" ]]; then
 # Optional OpenAI cleanup for local transcripts. Fill OPENAI_API_KEY and uncomment
 # LW_POST_PROCESS_MODEL to enable post-processing.
 export OPENAI_API_KEY=''
-# export LW_POST_PROCESS_MODEL='gpt-5.4-nano'
+# export LW_POST_PROCESS_MODEL='gpt-5.6-luna'
 export LW_POST_PROCESS_TIMEOUT='20'
 export LW_POST_PROCESS_GLOSSARY_FILE='${GLOSSARY_PATH}'
 

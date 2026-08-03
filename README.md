@@ -25,7 +25,7 @@ In normal mode, run `:LW` (or map it) to:
       device = "cpu",
       vad_filter = false,
       sample_rate = 16000,
-      post_process_model = "gpt-5.4-nano",
+      post_process_model = "gpt-5.6-luna",
       post_process_glossary_file = "~/.config/local-wisper/glossary.txt",
     })
 
@@ -129,7 +129,7 @@ python wisper_cli.py --backend whisper --model small --compute-type int8 --devic
   - cancel on `Escape`
 - The stop action transcribes through the persistent daemon and types the final text into the focused window with `wtype`.
 - Set `LW_OUTPUT_MODE=clipboard` in the wrapper environment if you want the old clipboard behavior back.
-- Set `LW_POST_PROCESS_MODEL=gpt-5.4-nano` in `~/.config/local-wisper/env` to clean up the final local transcript before delivery. The prompt is conservative, assumes full-stack web development context, normalizes accidental wrong-alphabet phonetic spellings such as Cyrillic-rendered English, and can apply a structured local correction glossary via `LW_POST_PROCESS_GLOSSARY_FILE`.
+- Set `LW_POST_PROCESS_MODEL=gpt-5.6-luna` in `~/.config/local-wisper/env` to clean up the final local transcript before delivery. Luna post-processing runs with reasoning disabled. The prompt is conservative, assumes full-stack web development context, normalizes accidental wrong-alphabet phonetic spellings such as Cyrillic-rendered English, and can apply a structured local correction glossary via `LW_POST_PROCESS_GLOSSARY_FILE`.
 
 ## Troubleshooting
 - `failed to start recorder`:
