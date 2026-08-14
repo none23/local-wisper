@@ -14,6 +14,7 @@ enum NativeAction {
     StopRecording,
     CancelRecording,
     Transcribe,
+    CleanTranscript,
     TypeOutput,
 }
 
@@ -37,12 +38,22 @@ client TranscriptCleaner = openai.OpenAiClient.new(
 function plan_command(command: Command) -> CommandPlan {
     let actions: NativeAction[] = match (command) {
         Command.Record => {
-            [NativeAction.EnsureModel, NativeAction.RecordInteractively, NativeAction.Transcribe]
+            [
+                NativeAction.EnsureModel,
+                NativeAction.RecordInteractively,
+                NativeAction.Transcribe,
+                NativeAction.CleanTranscript,
+            ]
         },
         Command.Preload => [NativeAction.EnsureModel],
         Command.SwayStart => [NativeAction.StartRecording, NativeAction.StartModel],
         Command.SwayStop => {
-            [NativeAction.StopRecording, NativeAction.Transcribe, NativeAction.TypeOutput]
+            [
+                NativeAction.StopRecording,
+                NativeAction.Transcribe,
+                NativeAction.CleanTranscript,
+                NativeAction.TypeOutput,
+            ]
         },
         Command.SwayCancel => [NativeAction.CancelRecording],
     };
@@ -108,14 +119,24 @@ function main() -> string {
 test "record plan" {
     assert.equal(
         plan_command(Command.Record).actions,
-        [NativeAction.EnsureModel, NativeAction.RecordInteractively, NativeAction.Transcribe],
+        [
+            NativeAction.EnsureModel,
+            NativeAction.RecordInteractively,
+            NativeAction.Transcribe,
+            NativeAction.CleanTranscript,
+        ],
     )
 }
 
 test "sway stop plan types the result" {
     assert.equal(
         plan_command(Command.SwayStop).actions,
-        [NativeAction.StopRecording, NativeAction.Transcribe, NativeAction.TypeOutput],
+        [
+            NativeAction.StopRecording,
+            NativeAction.Transcribe,
+            NativeAction.CleanTranscript,
+            NativeAction.TypeOutput,
+        ],
     )
 }
 

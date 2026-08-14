@@ -43,9 +43,9 @@ experimental rewrite. Keep it current while work is in progress.
 - Ordinary transcription must remain local. Remote tracing is not required.
 - Use BAML's built-in local structured tracing if it works out of the box. Do
   not build another tracing system for this experiment.
-- Model failures cross the generated bridge as a typed `CleanResult` rather
-  than an exception. The Rust host applies the 20-second deadline and falls
-  back to local cleanup.
+- Ordinary model failures cross the generated bridge as a typed `CleanResult`.
+  The Rust host also handles bridge errors, applies the 20-second deadline, and
+  falls back to local cleanup.
 
 ## Explicit non-goals
 
@@ -121,6 +121,14 @@ It accepts the current Sway wrapper's full invocation unchanged while rejecting
 different backends, models, devices, sample rates, compute types, and VAD modes.
 Five concurrent `preload` calls were tested against one resident Rust process
 and one CUDA allocation.
+
+The deterministic cleanup is implemented in Rust because BAML has no regular
+expression support suitable for the established boundary-aware rules. BAML
+owns the six-word decision and the complete `gpt-5.6-luna` prompt. Native tests
+cover spoken decimals, `numeric` phrases, non-cascading `[always]` rules,
+glossary validation, statement style, identifiers, questions, and non-Latin
+text. A one-second `sway-start`/`sway-stop` capture also completed through the
+new recorder and BAML plan; the empty recording correctly reported no speech.
 
 Model assets are pinned to Hugging Face revision
 `f88260fa0777fe0868dda6df85d1a98f012a4a7a`. The cache records exact sizes and

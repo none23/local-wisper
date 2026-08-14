@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use baml_sdk::{Command as BamlCommand, NativeAction};
 use clap::{Parser, ValueEnum};
 
+mod cleanup;
 mod daemon;
 mod delivery;
 mod model;
@@ -128,6 +129,20 @@ fn execute(action: NativeAction, args: &Args, state: &mut RunState) -> Result<()
             }
             Ok(())
         }
+        NativeAction::CleanTranscript => {
+            let Some(text) = state.transcript.as_deref() else {
+                return Ok(());
+            };
+            state.transcript = Some(cleanup::process(
+                text,
+                &cleanup::Options {
+                    model_enabled: args.post_process_model.is_some(),
+                    timeout: std::time::Duration::from_secs_f64(args.post_process_timeout),
+                    glossary_file: args.post_process_glossary_file.clone(),
+                },
+            ));
+            Ok(())
+        }
         NativeAction::TypeOutput => {
             let Some(text) = state.transcript.as_deref() else {
                 return Ok(());
@@ -182,9 +197,8 @@ fn validate_options(args: &Args) -> Result<()> {
     {
         bail!("only --post-process-model gpt-5.6-luna is supported")
     }
-    if args.post_process_timeout <= 0.0 {
+    if !args.post_process_timeout.is_finite() || args.post_process_timeout <= 0.0 {
         bail!("--post-process-timeout must be greater than zero")
     }
-    let _ = &args.post_process_glossary_file;
     Ok(())
 }
