@@ -132,6 +132,23 @@ model or binding its socket. This makes the one-model rule structural: racing
 clients can start processes, but only the lock owner can load CUDA state. The
 daemon handles requests serially and keeps that one model warm.
 
+Automatic selection uses a real system check rather than a user-facing model
+choice. An NVIDIA device selects the pinned FP16 export. With no NVIDIA device,
+or when CUDA model initialization fails, the same daemon process loads the
+pinned INT8 export on ONNX Runtime's CPU provider. The legacy `--device cuda`
+input follows this automatic behavior so an unchanged Sway wrapper also works
+on a CPU-only machine. `--device cpu` remains as a hidden test and compatibility
+override.
+
+The CPU feasibility test used the repository's INT8 encoder and decoder at the
+same pinned revision as FP16. Checksums matched. The model loaded in 1.75
+seconds, used about 1 GB resident memory, and transcribed the 11.04-second
+fixture in 803 ms. Its raw result added a few filler tokens compared with FP16,
+but preserved the sentence. With CUDA visible, automatic mode selected FP16,
+loaded in 1.36 seconds, and transcribed the fixture in 363 ms. With
+`nvidia-smi` hidden, automatic mode selected INT8 CPU and made no GPU
+allocation.
+
 The CLI now runs BAML's `plan_command` and executes the returned native actions.
 It accepts the current Sway wrapper's full invocation unchanged while rejecting
 different backends, models, devices, sample rates, compute types, and VAD modes.
@@ -168,8 +185,9 @@ emits those exact locked-version objects, and the installer stores them under
 - Sway invokes `preload`, `sway-start`, `sway-stop`, and `sway-cancel`.
 - Current environment values:
   - backend: `parakeet`
-  - compute type: `float16`
-  - device: `cuda`
+  - model format: selected automatically
+  - device: automatic; the retained `cuda` compatibility value also falls back
+    to CPU
   - VAD: `false`
   - output mode: `type`
   - post-process model: `gpt-5.6-luna`

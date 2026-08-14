@@ -2,40 +2,45 @@
 
 This branch replaces the Python application with a compiled `lw` executable.
 BAML defines the command workflow, cleanup policy, and optional OpenAI cleanup.
-A small Rust host records audio, owns the resident Parakeet model, and runs CUDA
-inference.
+A small Rust host records audio, owns the resident Parakeet model, and selects
+the fastest supported local runtime.
 
 The application uses one fixed setup:
 
 - `nvidia/parakeet-tdt-0.6b-v3`
-- FP16 CUDA inference
+- automatic FP16 CUDA or INT8 CPU inference
 - 16 kHz mono recording
 - no VAD
 
-There is no CPU fallback and no Faster Whisper backend.
+There is no Faster Whisper backend. Users do not choose a model, weight format,
+or device. `lw` tries CUDA when an NVIDIA device is present and falls back to
+CPU if CUDA cannot initialize the model.
 
 ## Install
 
-The current installer targets this Manjaro x86_64 system. It needs `cargo`,
-`curl`, `bsdtar`, `pacman`, and `pacman-key`. Audio capture needs `pw-record` or
-`ffmpeg`; Sway typing needs `wtype`.
+The installer targets x86_64 Linux and needs `cargo` and `curl`. On a Manjaro
+CUDA system without cuDNN 9, it also uses `bsdtar`, `pacman`, and `pacman-key`
+to install a verified local copy. A CPU-only system skips every CUDA setup
+step. Audio capture needs `pw-record` or `ffmpeg`; Sway typing needs `wtype`.
 
 ```bash
 ./install.sh
 lw preload
 ```
 
-`install.sh` builds and copies `~/.local/bin/lw`. If the system does not already
-provide cuDNN 9, it downloads the signed Manjaro package, verifies it with the
-pacman keyring, and extracts its shared libraries under
+`install.sh` builds and copies `~/.local/bin/lw`. If an NVIDIA GPU is present
+and the system does not already provide cuDNN 9, it downloads the signed
+Manjaro package, verifies it with the pacman keyring, and extracts its libraries under
 `~/.local/lib/local-wisper`. It also downloads and verifies BAML's 0.16 runtime
 library during installation. When upgrading from the Python version, it stops
-the old resident model before installing the new binary. Normal use needs
-neither Python nor the BAML toolchain.
+the old resident model. It also stops an installed native daemon during an
+upgrade. Normal use needs neither Python nor the BAML toolchain.
 
-The first `lw preload` downloads three pinned Parakeet files, verifies their
-sizes and SHA-256 hashes, loads the model on CUDA, and leaves one daemon running
-for the user. Later commands reuse the same model and cache.
+The first `lw preload` selects FP16 for CUDA or INT8 for CPU, downloads three
+pinned Parakeet files, verifies their sizes and SHA-256 hashes, and leaves one
+daemon running for the user. Later commands reuse the same model and cache.
+The exclusive user lock covers detection, download, and model loading, so an
+automatic fallback cannot overlap two model instances.
 
 ## Commands
 
@@ -96,3 +101,7 @@ The process split is intentionally small. BAML returns an exhaustive action
 plan for each command. Rust executes those actions and holds an exclusive
 per-user lock before loading Parakeet. That lock is what prevents two model
 copies from entering memory at once.
+
+The checked fixture on the development machine took 0.36 seconds with FP16
+CUDA and 0.80 seconds with INT8 CPU for 11.04 seconds of audio. The CPU daemon
+used about 1 GB of resident memory. CPU results will depend on the machine.
