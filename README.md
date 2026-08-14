@@ -29,8 +29,9 @@ lw preload
 provide cuDNN 9, it downloads the signed Manjaro package, verifies it with the
 pacman keyring, and extracts its shared libraries under
 `~/.local/lib/local-wisper`. It also downloads and verifies BAML's 0.16 runtime
-library during installation. Normal use needs neither Python nor the BAML
-toolchain.
+library during installation. When upgrading from the Python version, it stops
+the old resident model before installing the new binary. Normal use needs
+neither Python nor the BAML toolchain.
 
 The first `lw preload` downloads three pinned Parakeet files, verifies their
 sizes and SHA-256 hashes, loads the model on CUDA, and leaves one daemon running

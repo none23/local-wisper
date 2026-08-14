@@ -24,7 +24,7 @@ for lw_command in cargo curl bsdtar pacman pacman-key; do
 done
 
 echo "Building the release binary..."
-cargo build --release --manifest-path "${lw_project_dir}/Cargo.toml"
+cargo build --release --locked --manifest-path "${lw_project_dir}/Cargo.toml"
 
 mkdir -p "${lw_bin_dir}" "${lw_lib_dir}" "${lw_config_dir}" "${lw_package_cache}"
 chmod 700 "${lw_config_dir}"
@@ -49,12 +49,21 @@ if [[ ! -f /usr/lib/libcudnn.so.9 && ! -f "${lw_lib_dir}/libcudnn.so.9" ]]; then
   trap - EXIT
 fi
 
+while read -r lw_legacy_pid; do
+  [[ -n "${lw_legacy_pid}" ]] || continue
+  lw_legacy_command="$(tr '\0' ' ' <"/proc/${lw_legacy_pid}/cmdline" 2>/dev/null || true)"
+  if [[ "${lw_legacy_command}" == *"/local-wisper/"*"transcribe_daemon.py"* ]]; then
+    echo "Stopping legacy Python model process ${lw_legacy_pid}..."
+    kill "${lw_legacy_pid}" 2>/dev/null || true
+  fi
+done < <(pgrep -u "$(id -u)" -f 'transcribe_daemon\.py' || true)
+
 install -m755 "${lw_project_dir}/target/release/lw" "${lw_target}"
 
 if [[ ! -f "${lw_env_path}" ]]; then
   {
     echo "export OPENAI_API_KEY=''"
-    echo "export LW_POST_PROCESS_MODEL='gpt-5.6-luna'"
+    echo "export LW_POST_PROCESS_MODEL=''"
     echo "export LW_POST_PROCESS_TIMEOUT='20'"
     echo "export LW_POST_PROCESS_GLOSSARY_FILE='${lw_glossary_path}'"
     echo "export LW_BACKEND='parakeet'"

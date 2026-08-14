@@ -59,6 +59,9 @@ experimental rewrite. Keep it current while work is in progress.
 The legacy Python application, Faster Whisper dependency list, Neovim plugin,
 Python launchers, and their old tests were removed after the native workflows
 passed. The Sway wrapper remains and now exposes only the retained commands.
+The installer stops a matching legacy Python transcription daemon before the
+first native preload, so migration cannot leave both model implementations in
+GPU memory.
 
 ## Toolchain strategy
 
