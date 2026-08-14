@@ -12,6 +12,9 @@ experimental rewrite. Keep it current while work is in progress.
 - A small Rust layer may implement Parakeet inference and native operations that
   BAML cannot express. All application behavior should remain in BAML where the
   language permits it.
+- BAML owns the exhaustive command plan, the decision to use remote cleanup,
+  and the OpenAI cleanup prompt. Rust executes native actions and owns local
+  deterministic text transformations that need regular expressions.
 - This worktree is experimental. Compatibility with the primary checkout is not
   required beyond the explicitly preserved user-facing workflow.
 
@@ -40,6 +43,9 @@ experimental rewrite. Keep it current while work is in progress.
 - Ordinary transcription must remain local. Remote tracing is not required.
 - Use BAML's built-in local structured tracing if it works out of the box. Do
   not build another tracing system for this experiment.
+- Model failures cross the generated bridge as a typed `CleanResult` rather
+  than an exception. The Rust host applies the 20-second deadline and falls
+  back to local cleanup.
 
 ## Explicit non-goals
 
