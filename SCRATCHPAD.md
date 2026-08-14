@@ -55,10 +55,14 @@ experimental rewrite. Keep it current while work is in progress.
 - Installed BAML wrapper: 0.2.4.
 - Installed BAML toolchain at project start: 0.16.0 canary.
 - `baml pack` is available.
-- `baml bridge` is not exposed by the installed CLI even though bridge packages
-  exist and the public quickstart advertises the command.
-- First try a pinned upstream Rust bridge revision. If it is unusable, use the
-  lower-level BAML Rust runtime while preserving the one-executable result.
+- `baml bridge` is not exposed by the installed CLI even though the public
+  quickstart advertises that command. In 0.16, the working Rust path is
+  `baml generate add rust`; the generated SDK embeds BAML bytecode and exposes
+  typed host callables.
+- The Rust SDK loads the BAML engine from a versioned native shared library. It
+  can download that library into the user cache on first use. Treat it like the
+  ONNX/CUDA shared libraries allowed by the packaging decision, and make the
+  installer acquire it so normal runtime does not depend on a network request.
 - Python and NeMo are allowed for one-time model conversion or preparation.
   They must not be required to build, install, or run the final application.
 
@@ -66,9 +70,15 @@ experimental rewrite. Keep it current while work is in progress.
 
 Before expanding the rewrite, prove that the exact Parakeet v3 model can perform
 correct native CUDA inference on this machine. The initial `nvidia-smi` probe
-reported an NVML driver/library mismatch. Diagnose or fix that if it prevents
-native inference. Do not substitute CPU inference and continue as though the
-gate passed.
+reported an NVML driver/library mismatch. The running kernel module is
+`610.43.03`, while installed NVIDIA userspace is `610.57.04`; a reboot is likely
+needed before the CUDA gate can pass. Do not substitute CPU inference and
+continue as though the gate passed.
+
+The native inference candidate is `parakeet-rs` 0.3.7 with ONNX Runtime's CUDA
+execution provider. A canonical FP16 export of the exact v3 model is available
+from `ysdede/parakeet-tdt-0.6b-v3-onnx` with the encoder, decoder/joint graph,
+vocabulary, and preprocessing graph expected by the Rust decoder.
 
 ## Current system integration
 

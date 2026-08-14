@@ -9,6 +9,7 @@ venv/
 
 # Local runtime outputs
 wisper_recording_*.wav
+target/
 
 # OS/editor noise
 .DS_Store
