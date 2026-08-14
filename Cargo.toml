@@ -12,8 +12,15 @@ path = "src/main.rs"
 anyhow = "1.0"
 baml_sdk = { path = "baml_sdk" }
 clap = { version = "4.5", features = ["derive"] }
+fs2 = "0.4"
+hex = "0.4"
+libc = "0.2"
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["api-28", "cuda", "download-binaries", "ndarray", "std"] }
 parakeet-rs = { version = "=0.3.7", default-features = false, features = ["api-28", "cuda", "ort-defaults"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
 
 [profile.release]
 lto = "thin"

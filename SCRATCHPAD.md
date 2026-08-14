@@ -107,6 +107,17 @@ execution provider. A canonical FP16 export of the exact v3 model is available
 from `ysdede/parakeet-tdt-0.6b-v3-onnx` with the encoder, decoder/joint graph,
 vocabulary, and preprocessing graph expected by the Rust decoder.
 
+The native daemon now holds an exclusive per-user file lock before touching the
+model or binding its socket. This makes the one-model rule structural: racing
+clients can start processes, but only the lock owner can load CUDA state. The
+daemon handles requests serially and keeps that one model warm.
+
+Model assets are pinned to Hugging Face revision
+`f88260fa0777fe0868dda6df85d1a98f012a4a7a`. The cache records exact sizes and
+SHA-256 digests for the encoder, decoder/joint graph, and vocabulary. Downloads
+land in `.part` files and are renamed only after verification. A completion
+marker lets later daemon starts avoid hashing the 1.2 GB encoder again.
+
 ## Current system integration
 
 - Sway invokes `preload`, `sway-start`, `sway-stop`, and `sway-cancel`.
