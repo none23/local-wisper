@@ -81,6 +81,16 @@ the CUDA provider, then failed at `cudaSetDevice` with CUDA error 803:
 confirms the version mismatch is the current hard blocker. Reboot before the
 next probe so the running kernel module matches installed userspace.
 
+After reboot, both the kernel module and userspace reported `610.57.04`. The
+strict CUDA probe then passed with the canonical FP16 export: model load took
+1.38 seconds and an 11.04-second fixture transcribed in 645 ms with the expected
+sentence. Native CUDA inference is feasible on this machine.
+
+ONNX Runtime requires cuDNN 9. The current Python environment contains the
+native cuDNN libraries, and a cache-local `libcudnn.so` alias proved they work.
+The final installer must acquire and expose cuDNN directly rather than reaching
+into a Python environment.
+
 ONNX Runtime's static build also resolved provider libraries beside the T3 Code
 AppImage during the probe. Temporary symlinks proved provider discovery, then
 were removed. The final package needs an explicit provider-library location

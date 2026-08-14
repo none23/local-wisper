@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode, Transcriber};
+use parakeet_rs::{ExecutionConfig, ParakeetTDT, TimestampMode, Transcriber};
 
 #[derive(Debug, Parser)]
 #[command(name = "lw", about = "Experimental native Parakeet CUDA probe")]
@@ -17,12 +17,10 @@ struct Args {
 }
 
 fn strict_cuda_config() -> ExecutionConfig {
-    ExecutionConfig::new()
-        .with_execution_provider(ExecutionProvider::Cuda)
-        .with_custom_configure(|builder| {
-            Ok(builder
-                .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])?)
-        })
+    ExecutionConfig::new().with_custom_configure(|builder| {
+        Ok(builder
+            .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])?)
+    })
 }
 
 fn main() -> Result<()> {
