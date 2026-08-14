@@ -5,6 +5,8 @@ lw_project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 lw_bin_dir="${HOME}/.local/bin"
 lw_lib_dir="${HOME}/.local/lib/local-wisper"
 lw_target="${lw_bin_dir}/lw"
+lw_ort_shared="libonnxruntime_providers_shared.so"
+lw_ort_cuda="libonnxruntime_providers_cuda.so"
 lw_config_dir="${HOME}/.config/local-wisper"
 lw_env_path="${lw_config_dir}/env"
 lw_glossary_path="${lw_config_dir}/glossary.txt"
@@ -25,6 +27,13 @@ done
 
 echo "Building the release binary..."
 cargo build --release --locked --manifest-path "${lw_project_dir}/Cargo.toml"
+
+for lw_ort_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
+  if [[ ! -f "${lw_project_dir}/target/release/${lw_ort_library}" ]]; then
+    echo "Release build did not produce ${lw_ort_library}." >&2
+    exit 1
+  fi
+done
 
 mkdir -p "${lw_bin_dir}" "${lw_lib_dir}" "${lw_config_dir}" "${lw_package_cache}"
 chmod 700 "${lw_config_dir}"
@@ -59,6 +68,14 @@ while read -r lw_legacy_pid; do
 done < <(pgrep -u "$(id -u)" -f 'transcribe_daemon\.py' || true)
 
 install -m755 "${lw_project_dir}/target/release/lw" "${lw_target}"
+for lw_ort_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
+  install -m755 \
+    -T "$(readlink -f "${lw_project_dir}/target/release/${lw_ort_library}")" \
+    "${lw_lib_dir}/${lw_ort_library}"
+  ln -sfn \
+    "../lib/local-wisper/${lw_ort_library}" \
+    "${lw_bin_dir}/${lw_ort_library}"
+done
 
 if [[ ! -f "${lw_env_path}" ]]; then
   {

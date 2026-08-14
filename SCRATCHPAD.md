@@ -152,8 +152,12 @@ The optimized `lw` binary is 35 MB and links only the ordinary glibc, libstdc++,
 libgcc, and libm runtime libraries at startup. A release build loaded cuDNN from
 an explicit native-library directory with `LD_LIBRARY_PATH` removed, then
 loaded Parakeet on CUDA in 1.33 seconds. It transcribed the 11.04-second fixture
-correctly in 249 ms. The installer was not run against the live user prefix
-because the primary checkout remains the active installation.
+correctly in 249 ms. The installer was run against the live user prefix after
+explicit approval. It stopped the legacy Python daemon and replaced
+`~/.local/bin/lw`. The first installed preload exposed that ONNX Runtime
+resolves its CUDA provider shared objects beside the executable. The build now
+emits those exact locked-version objects, and the installer stores them under
+`~/.local/lib/local-wisper` with links beside `lw`.
 
 ## Current system integration
 
@@ -173,5 +177,6 @@ because the primary checkout remains the active installation.
 - Make atomic commits at meaningful milestones.
 - Keep this file updated when a decision or feasibility finding changes the
   implementation.
-- Do not switch the system installation to this worktree until CUDA inference
-  and the required Sway workflow work end to end.
+- The system installation now points at this worktree's native build. A fresh
+  install from main restores the Python launcher; stop this daemon first so the
+  old implementation can claim the model memory.
