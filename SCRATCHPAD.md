@@ -75,6 +75,17 @@ reported an NVML driver/library mismatch. The running kernel module is
 needed before the CUDA gate can pass. Do not substitute CPU inference and
 continue as though the gate passed.
 
+The strict probe loaded the verified FP16 model files far enough to initialize
+the CUDA provider, then failed at `cudaSetDevice` with CUDA error 803:
+"system has unsupported display driver / cuda driver combination." This
+confirms the version mismatch is the current hard blocker. Reboot before the
+next probe so the running kernel module matches installed userspace.
+
+ONNX Runtime's static build also resolved provider libraries beside the T3 Code
+AppImage during the probe. Temporary symlinks proved provider discovery, then
+were removed. The final package needs an explicit provider-library location
+rather than relying on that environment-specific lookup.
+
 The native inference candidate is `parakeet-rs` 0.3.7 with ONNX Runtime's CUDA
 execution provider. A canonical FP16 export of the exact v3 model is available
 from `ysdede/parakeet-tdt-0.6b-v3-onnx` with the encoder, decoder/joint graph,
