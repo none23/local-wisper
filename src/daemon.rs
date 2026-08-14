@@ -128,6 +128,13 @@ pub fn ensure_ready() -> Result<()> {
     bail!("transcription daemon did not become ready within 300 seconds")
 }
 
+pub fn start() -> Result<()> {
+    if ping().is_ok() {
+        return Ok(());
+    }
+    spawn()
+}
+
 pub fn transcribe(audio: &Path) -> Result<String> {
     ensure_ready()?;
     let response = request(&Request::Transcribe {
@@ -144,7 +151,7 @@ pub fn transcribe(audio: &Path) -> Result<String> {
 }
 
 fn ping() -> Result<()> {
-    let response = request(&Request::Ping)?;
+    let response = request_with_timeout(&Request::Ping, Duration::from_millis(250))?;
     if response.ok {
         Ok(())
     } else {
@@ -153,11 +160,15 @@ fn ping() -> Result<()> {
 }
 
 fn request(request: &Request) -> Result<Response> {
+    request_with_timeout(request, REQUEST_TIMEOUT)
+}
+
+fn request_with_timeout(request: &Request, timeout: Duration) -> Result<Response> {
     let socket_path = paths::socket_path()?;
     let mut stream = UnixStream::connect(&socket_path)
         .with_context(|| format!("failed to connect to {}", socket_path.display()))?;
-    stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
-    stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
     serde_json::to_writer(&mut stream, request)?;
     stream.write_all(b"\n")?;
     stream.flush()?;

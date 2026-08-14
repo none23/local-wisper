@@ -69,6 +69,10 @@ experimental rewrite. Keep it current while work is in progress.
   can download that library into the user cache on first use. Treat it like the
   ONNX/CUDA shared libraries allowed by the packaging decision, and make the
   installer acquire it so normal runtime does not depend on a network request.
+- The generated bridge was exercised from the native `lw` process. Its first
+  invocation downloaded and verified BAML 0.16.0's
+  `libbaml_cffi-x86_64-unknown-linux-gnu.so`; later calls reused the cache.
+  BAML emits local structured runtime logs without extra application code.
 - Python and NeMo are allowed for one-time model conversion or preparation.
   They must not be required to build, install, or run the final application.
 
@@ -111,6 +115,12 @@ The native daemon now holds an exclusive per-user file lock before touching the
 model or binding its socket. This makes the one-model rule structural: racing
 clients can start processes, but only the lock owner can load CUDA state. The
 daemon handles requests serially and keeps that one model warm.
+
+The CLI now runs BAML's `plan_command` and executes the returned native actions.
+It accepts the current Sway wrapper's full invocation unchanged while rejecting
+different backends, models, devices, sample rates, compute types, and VAD modes.
+Five concurrent `preload` calls were tested against one resident Rust process
+and one CUDA allocation.
 
 Model assets are pinned to Hugging Face revision
 `f88260fa0777fe0868dda6df85d1a98f012a4a7a`. The cache records exact sizes and

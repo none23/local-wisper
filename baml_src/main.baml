@@ -8,6 +8,7 @@ enum Command {
 
 enum NativeAction {
     EnsureModel,
+    StartModel,
     RecordInteractively,
     StartRecording,
     StopRecording,
@@ -39,7 +40,7 @@ function plan_command(command: Command) -> CommandPlan {
             [NativeAction.EnsureModel, NativeAction.RecordInteractively, NativeAction.Transcribe]
         },
         Command.Preload => [NativeAction.EnsureModel],
-        Command.SwayStart => [NativeAction.StartRecording, NativeAction.EnsureModel],
+        Command.SwayStart => [NativeAction.StartRecording, NativeAction.StartModel],
         Command.SwayStop => {
             [NativeAction.StopRecording, NativeAction.Transcribe, NativeAction.TypeOutput]
         },
