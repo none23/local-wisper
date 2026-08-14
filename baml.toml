@@ -5,12 +5,3 @@ name = "local-wisper"
 output_type = "rust"
 naming_convention = "preserve-case"
 output_dir = "."
-
-# [scripts]
-# dev = "-f main"
-
-# Add a client generator, then generate its SDK:
-#   baml generate add python/pydantic2
-#   baml generate
-#
-# Run `baml generate add --help` to see every supported output type.

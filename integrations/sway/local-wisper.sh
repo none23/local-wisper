@@ -56,7 +56,7 @@ else
 fi
 
 case "${1:-}" in
-  sway-stop|sway-toggle)
+  sway-stop)
     if [[ "${LW_OUTPUT_MODE}" == "type" ]]; then
       args+=(--type-output)
     fi

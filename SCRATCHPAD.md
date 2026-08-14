@@ -56,6 +56,10 @@ experimental rewrite. Keep it current while work is in progress.
 - No CPU-only success path.
 - No elaborate crash recovery for the resident process.
 
+The legacy Python application, Faster Whisper dependency list, Neovim plugin,
+Python launchers, and their old tests were removed after the native workflows
+passed. The Sway wrapper remains and now exposes only the retained commands.
+
 ## Toolchain strategy
 
 - Installed BAML wrapper: 0.2.4.
@@ -73,6 +77,9 @@ experimental rewrite. Keep it current while work is in progress.
   invocation downloaded and verified BAML 0.16.0's
   `libbaml_cffi-x86_64-unknown-linux-gnu.so`; later calls reused the cache.
   BAML emits local structured runtime logs without extra application code.
+- BAML also writes ignored structured profiles under `.baml/profiles/` during
+  ordinary SDK calls. This is the advertised local tracing behavior, so no
+  separate trace code was added.
 - Python and NeMo are allowed for one-time model conversion or preparation.
   They must not be required to build, install, or run the final application.
 
