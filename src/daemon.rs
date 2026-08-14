@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::net::Shutdown;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -191,7 +191,10 @@ fn spawn(preference: model::DevicePreference) -> Result<()> {
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let log = File::create(&log_path)
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
         .with_context(|| format!("failed to create daemon log {}", log_path.display()))?;
     let error_log = log.try_clone()?;
 
