@@ -112,9 +112,8 @@ pub struct Model {
 impl Model {
     pub fn load(preference: DevicePreference) -> Result<Self> {
         match preference {
-            DevicePreference::Cuda => load_cuda(),
             DevicePreference::Cpu => load_cpu(),
-            DevicePreference::Auto if runtime::cuda_hardware_present() => {
+            DevicePreference::Auto | DevicePreference::Cuda if runtime::cuda_hardware_present() => {
                 load_cuda().or_else(|cuda_error| {
                     eprintln!(
                         "CUDA model initialization failed; falling back to CPU: {cuda_error:#}"
@@ -122,7 +121,7 @@ impl Model {
                     load_cpu()
                 })
             }
-            DevicePreference::Auto => {
+            DevicePreference::Auto | DevicePreference::Cuda => {
                 eprintln!("no NVIDIA CUDA device detected; using CPU");
                 load_cpu()
             }
