@@ -18,7 +18,7 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
   exit 1
 fi
 
-for lw_command in cargo curl bsdtar pacman pacman-key; do
+for lw_command in cargo curl readlink; do
   if ! command -v "${lw_command}" >/dev/null 2>&1; then
     echo "Missing required command: ${lw_command}" >&2
     exit 1
@@ -38,7 +38,19 @@ done
 mkdir -p "${lw_bin_dir}" "${lw_lib_dir}" "${lw_config_dir}" "${lw_package_cache}"
 chmod 700 "${lw_config_dir}"
 
-if [[ ! -f /usr/lib/libcudnn.so.9 && ! -f "${lw_lib_dir}/libcudnn.so.9" ]]; then
+lw_has_nvidia=false
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  lw_has_nvidia=true
+fi
+
+if [[ "${lw_has_nvidia}" == true && ! -f /usr/lib/libcudnn.so.9 && ! -f "${lw_lib_dir}/libcudnn.so.9" ]]; then
+  for lw_command in bsdtar pacman pacman-key; do
+    if ! command -v "${lw_command}" >/dev/null 2>&1; then
+      echo "CUDA is available, but cuDNN 9 is missing and ${lw_command} cannot install it." >&2
+      echo "Install cuDNN 9 for this system, then rerun install.sh." >&2
+      exit 1
+    fi
+  done
   echo "Downloading the signed Manjaro cuDNN package..."
   lw_cudnn_url="$(pacman -Sp --print-format '%l' cudnn | tail -n 1)"
   if [[ -z "${lw_cudnn_url}" ]]; then
@@ -67,6 +79,22 @@ while read -r lw_legacy_pid; do
   fi
 done < <(pgrep -u "$(id -u)" -f 'transcribe_daemon\.py' || true)
 
+while read -r lw_native_pid; do
+  [[ -n "${lw_native_pid}" ]] || continue
+  lw_native_exe="$(readlink -f "/proc/${lw_native_pid}/exe" 2>/dev/null || true)"
+  if [[ "${lw_native_exe}" == "${lw_target}" ]]; then
+    echo "Stopping installed native model process ${lw_native_pid}..."
+    kill "${lw_native_pid}" 2>/dev/null || true
+    for _ in {1..50}; do
+      [[ ! -e "/proc/${lw_native_pid}" ]] && break
+      sleep 0.1
+    done
+    if [[ -e "/proc/${lw_native_pid}" ]]; then
+      kill -KILL "${lw_native_pid}" 2>/dev/null || true
+    fi
+  fi
+done < <(pgrep -u "$(id -u)" -f '(^|/)lw __daemon( |$)' || true)
+
 install -m755 "${lw_project_dir}/target/release/lw" "${lw_target}"
 for lw_ort_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
   install -m755 \
@@ -84,8 +112,7 @@ if [[ ! -f "${lw_env_path}" ]]; then
     echo "export LW_POST_PROCESS_TIMEOUT='20'"
     echo "export LW_POST_PROCESS_GLOSSARY_FILE='${lw_glossary_path}'"
     echo "export LW_BACKEND='parakeet'"
-    echo "export LW_COMPUTE_TYPE='float16'"
-    echo "export LW_DEVICE='cuda'"
+    echo "export LW_DEVICE='auto'"
     echo "export LW_VAD_FILTER='false'"
     echo "export LW_OUTPUT_MODE='type'"
   } >"${lw_env_path}"
@@ -100,4 +127,4 @@ echo "Caching the BAML 0.16 runtime..."
 "${lw_target}" sway-cancel
 
 echo "Installed ${lw_target}"
-echo "Run 'lw preload' to download the verified Parakeet model and load it on CUDA."
+echo "Run 'lw preload' to select the best available runtime and load Parakeet."
