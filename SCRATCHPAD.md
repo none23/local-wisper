@@ -21,9 +21,13 @@ experimental rewrite. Keep it current while work is in progress.
 ## Required behavior
 
 - Use `nvidia/parakeet-tdt-0.6b-v3` only.
-- CUDA inference is mandatory. CPU inference is not a useful fallback.
-- Use the current machine configuration: CUDA, float16, 16 kHz mono audio, VAD
-  disabled.
+- Device and model format are automatic implementation details. Prefer CUDA
+  with the FP16 export when CUDA can initialize the model; otherwise use the
+  CPU provider with the pinned INT8 export. Users should not need to choose a
+  model, quantization, or device.
+- Keep `--device`, `--model`, and `--compute-type` only where the existing Sway
+  wrapper needs compatibility. The normal and documented mode is `auto`.
+- Use 16 kHz mono audio with VAD disabled.
 - Never load more than one model copy for the user. Concurrent commands must
   reuse or wait for the single resident model owner.
 - Cache one verified copy of model assets per user. Download and preparation
@@ -53,7 +57,7 @@ experimental rewrite. Keep it current while work is in progress.
 - No Neovim integration.
 - No compatibility with unused Python CLI flags.
 - No preservation of the old newline-delimited JSON socket protocol.
-- No CPU-only success path.
+- No user-facing model or quantization selection system.
 - No elaborate crash recovery for the resident process.
 
 The legacy Python application, Faster Whisper dependency list, Neovim plugin,
