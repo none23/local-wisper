@@ -55,6 +55,7 @@ pub fn serve() -> Result<()> {
 }
 
 fn serve_locked() -> Result<()> {
+    crate::runtime::prepare_cuda()?;
     let model_dir = paths::model_dir()?;
     model::prepare(&model_dir)?;
     let mut model = model::Model::load(&model_dir)?;
@@ -116,12 +117,17 @@ pub fn ensure_ready() -> Result<()> {
     let _ = fs::remove_file(&error_path);
     spawn()?;
     let started = Instant::now();
+    let mut last_spawn = Instant::now();
     while started.elapsed() < READY_TIMEOUT {
         if ping().is_ok() {
             return Ok(());
         }
         if let Ok(error) = fs::read_to_string(&error_path) {
             bail!("transcription daemon failed to start: {}", error.trim())
+        }
+        if last_spawn.elapsed() >= Duration::from_secs(3) {
+            spawn()?;
+            last_spawn = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(150));
     }

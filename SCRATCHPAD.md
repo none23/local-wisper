@@ -98,8 +98,10 @@ sentence. Native CUDA inference is feasible on this machine.
 
 ONNX Runtime requires cuDNN 9. The current Python environment contains the
 native cuDNN libraries, and a cache-local `libcudnn.so` alias proved they work.
-The final installer must acquire and expose cuDNN directly rather than reaching
-into a Python environment.
+The installer now resolves the current signed Manjaro `cudnn` package through
+pacman, verifies its detached signature with the system keyring, and extracts
+the libraries under `~/.local/lib/local-wisper` when cuDNN 9 is not installed
+system-wide. The executable preloads that directory before initializing CUDA.
 
 ONNX Runtime's static build also resolved provider libraries beside the T3 Code
 AppImage during the probe. Temporary symlinks proved provider discovery, then
@@ -135,6 +137,13 @@ Model assets are pinned to Hugging Face revision
 SHA-256 digests for the encoder, decoder/joint graph, and vocabulary. Downloads
 land in `.part` files and are renamed only after verification. A completion
 marker lets later daemon starts avoid hashing the 1.2 GB encoder again.
+
+The optimized `lw` binary is 35 MB and links only the ordinary glibc, libstdc++,
+libgcc, and libm runtime libraries at startup. A release build loaded cuDNN from
+an explicit native-library directory with `LD_LIBRARY_PATH` removed, then
+loaded Parakeet on CUDA in 1.33 seconds. It transcribed the 11.04-second fixture
+correctly in 249 ms. The installer was not run against the live user prefix
+because the primary checkout remains the active installation.
 
 ## Current system integration
 

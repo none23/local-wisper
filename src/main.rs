@@ -10,6 +10,7 @@ mod delivery;
 mod model;
 mod paths;
 mod recording;
+mod runtime;
 
 const MODEL_ID: &str = "nvidia/parakeet-tdt-0.6b-v3";
 
