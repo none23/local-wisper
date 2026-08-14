@@ -32,7 +32,7 @@ struct Response {
     error: Option<String>,
 }
 
-pub fn serve() -> Result<()> {
+pub fn serve(preference: model::DevicePreference) -> Result<()> {
     let lock_path = paths::daemon_lock_path()?;
     let lock = OpenOptions::new()
         .create(true)
@@ -47,18 +47,15 @@ pub fn serve() -> Result<()> {
 
     let error_path = paths::daemon_error_path()?;
     let _ = fs::remove_file(&error_path);
-    let result = serve_locked();
+    let result = serve_locked(preference);
     if let Err(error) = &result {
         let _ = fs::write(&error_path, format!("{error:#}\n"));
     }
     result
 }
 
-fn serve_locked() -> Result<()> {
-    crate::runtime::prepare_cuda()?;
-    let model_dir = paths::model_dir()?;
-    model::prepare(&model_dir)?;
-    let mut model = model::Model::load(&model_dir)?;
+fn serve_locked(preference: model::DevicePreference) -> Result<()> {
+    let mut model = model::Model::load(preference)?;
 
     let socket_path = paths::socket_path()?;
     let _ = fs::remove_file(&socket_path);
@@ -108,14 +105,14 @@ fn read_request(stream: &UnixStream) -> Result<Request> {
     serde_json::from_str(&line).context("invalid daemon request")
 }
 
-pub fn ensure_ready() -> Result<()> {
+pub fn ensure_ready(preference: model::DevicePreference) -> Result<()> {
     if ping().is_ok() {
         return Ok(());
     }
 
     let error_path = paths::daemon_error_path()?;
     let _ = fs::remove_file(&error_path);
-    spawn()?;
+    spawn(preference)?;
     let started = Instant::now();
     let mut last_spawn = Instant::now();
     while started.elapsed() < READY_TIMEOUT {
@@ -126,7 +123,7 @@ pub fn ensure_ready() -> Result<()> {
             bail!("transcription daemon failed to start: {}", error.trim())
         }
         if last_spawn.elapsed() >= Duration::from_secs(3) {
-            spawn()?;
+            spawn(preference)?;
             last_spawn = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(150));
@@ -134,15 +131,15 @@ pub fn ensure_ready() -> Result<()> {
     bail!("transcription daemon did not become ready within 300 seconds")
 }
 
-pub fn start() -> Result<()> {
+pub fn start(preference: model::DevicePreference) -> Result<()> {
     if ping().is_ok() {
         return Ok(());
     }
-    spawn()
+    spawn(preference)
 }
 
-pub fn transcribe(audio: &Path) -> Result<String> {
-    ensure_ready()?;
+pub fn transcribe(audio: &Path, preference: model::DevicePreference) -> Result<String> {
+    ensure_ready(preference)?;
     let response = request(&Request::Transcribe {
         audio: audio.to_path_buf(),
     })?;
@@ -188,7 +185,7 @@ fn request_with_timeout(request: &Request, timeout: Duration) -> Result<Response
     serde_json::from_str(&line).context("invalid daemon response")
 }
 
-fn spawn() -> Result<()> {
+fn spawn(preference: model::DevicePreference) -> Result<()> {
     let executable = std::env::current_exe().context("failed to locate the lw executable")?;
     let log_path = paths::daemon_log_path()?;
     if let Some(parent) = log_path.parent() {
@@ -201,6 +198,7 @@ fn spawn() -> Result<()> {
     let mut command = Command::new(executable);
     command
         .arg("__daemon")
+        .arg(preference.as_str())
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));

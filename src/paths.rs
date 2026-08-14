@@ -5,8 +5,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
-const MODEL_DIR_NAME: &str = "parakeet-tdt-0.6b-v3-fp16-f88260fa";
-
 pub fn cache_root() -> Result<PathBuf> {
     let root = if let Some(path) = env::var_os("XDG_CACHE_HOME") {
         PathBuf::from(path)
@@ -18,8 +16,8 @@ pub fn cache_root() -> Result<PathBuf> {
     Ok(root.join("local-wisper"))
 }
 
-pub fn model_dir() -> Result<PathBuf> {
-    Ok(cache_root()?.join("models").join(MODEL_DIR_NAME))
+pub fn model_dir(name: &str) -> Result<PathBuf> {
+    Ok(cache_root()?.join("models").join(name))
 }
 
 pub fn runtime_dir() -> Result<PathBuf> {

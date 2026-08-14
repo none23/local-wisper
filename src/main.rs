@@ -26,43 +26,43 @@ enum CliCommand {
 #[derive(Debug, Parser)]
 #[command(
     name = "lw",
-    about = "Record speech and transcribe it locally with Parakeet on CUDA"
+    about = "Record speech and transcribe it locally with Parakeet"
 )]
 struct Args {
     #[arg(value_enum, default_value = "record")]
     command: CliCommand,
 
-    #[arg(long, default_value = "parakeet")]
+    #[arg(long, default_value = "parakeet", hide = true)]
     backend: String,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     model: Option<String>,
 
-    #[arg(long, default_value = "float16")]
-    compute_type: String,
+    #[arg(long, hide = true)]
+    compute_type: Option<String>,
 
-    #[arg(long, default_value = "cuda")]
-    device: String,
+    #[arg(long, value_enum, default_value_t, hide = true)]
+    device: model::DevicePreference,
 
-    #[arg(long, default_value_t = 16_000)]
+    #[arg(long, default_value_t = 16_000, hide = true)]
     sample_rate: u32,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     vad_filter: bool,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     no_vad_filter: bool,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     type_output: bool,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     post_process_model: Option<String>,
 
-    #[arg(long, default_value_t = 20.0)]
+    #[arg(long, default_value_t = 20.0, hide = true)]
     post_process_timeout: f64,
 
-    #[arg(long)]
+    #[arg(long, hide = true)]
     post_process_glossary_file: Option<PathBuf>,
 }
 
@@ -74,7 +74,13 @@ struct RunState {
 
 fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() == Some("__daemon") {
-        return daemon::serve();
+        let preference = std::env::args()
+            .nth(2)
+            .as_deref()
+            .map(model::DevicePreference::parse)
+            .transpose()?
+            .unwrap_or_default();
+        return daemon::serve(preference);
     }
 
     let args = Args::parse();
@@ -105,8 +111,8 @@ fn main() -> Result<()> {
 
 fn execute(action: NativeAction, args: &Args, state: &mut RunState) -> Result<()> {
     match action {
-        NativeAction::EnsureModel => daemon::ensure_ready(),
-        NativeAction::StartModel => daemon::start(),
+        NativeAction::EnsureModel => daemon::ensure_ready(args.device),
+        NativeAction::StartModel => daemon::start(args.device),
         NativeAction::RecordInteractively => {
             state.audio = Some(recording::record_interactively()?);
             Ok(())
@@ -122,7 +128,7 @@ fn execute(action: NativeAction, args: &Args, state: &mut RunState) -> Result<()
                 .audio
                 .as_ref()
                 .context("BAML requested transcription before recording audio")?;
-            let text = daemon::transcribe(audio.path())?;
+            let text = daemon::transcribe(audio.path(), args.device)?;
             if text.is_empty() {
                 eprintln!("No speech detected.");
             } else {
@@ -179,12 +185,8 @@ fn validate_options(args: &Args) -> Result<()> {
     if args.model.as_deref().is_some_and(|model| model != MODEL_ID) {
         bail!("only --model {MODEL_ID} is supported")
     }
-    if args.compute_type != "float16" {
-        bail!("only --compute-type float16 is supported")
-    }
-    if args.device != "cuda" {
-        bail!("only --device cuda is supported")
-    }
+    // Kept as a no-op because older Sway wrappers pass the former precision.
+    let _ = &args.compute_type;
     if args.sample_rate != 16_000 {
         bail!("only --sample-rate 16000 is supported")
     }
