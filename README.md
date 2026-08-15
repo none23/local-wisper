@@ -61,6 +61,8 @@ lw sway-cancel
 Bare `lw` records until Enter, prints the transcript, and copies it to the
 clipboard. The Sway commands keep the existing wrapper contract. The supplied
 wrapper can remain at `~/.config/sway/scripts/local-wisper.sh` with no changes.
+The old Neovim plugin has been removed from this rewrite. Sway is the only
+bundled integration.
 
 ## Transcript cleanup
 
