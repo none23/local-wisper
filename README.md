@@ -150,6 +150,13 @@ second model process.
 
 ## Development
 
+Install `pre-commit` and `shellcheck`, then enable the fast local checks:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
 After changing a `.baml` file, run:
 
 ```bash
