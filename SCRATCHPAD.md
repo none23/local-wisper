@@ -76,6 +76,9 @@ GPU memory.
   quickstart advertises that command. In 0.16, the working Rust path is
   `baml generate add rust`; the generated SDK embeds BAML bytecode and exposes
   typed host callables.
+- The generated `baml_sdk/` crate is build output and remains ignored. The
+  installer runs `baml generate` before Cargo; normal runtime still needs only
+  the embedded bytecode and BAML shared library.
 - The Rust SDK loads the BAML engine from a versioned native shared library. It
   can download that library into the user cache on first use. Treat it like the
   ONNX/CUDA shared libraries allowed by the packaging decision, and make the

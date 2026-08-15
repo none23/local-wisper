@@ -18,11 +18,11 @@ CPU if CUDA cannot initialize the model.
 
 ## Install
 
-The installer targets x86_64 Linux and needs `cargo`, `curl`, and `sha256sum`.
-On a Manjaro CUDA system without cuDNN 9, it also uses `bsdtar`, `pacman`, and
-`pacman-key` to install a verified local copy. A CPU-only system skips every
-CUDA setup step. Audio capture needs `pw-record` or `ffmpeg`; Sway typing needs
-`wtype`.
+The installer targets x86_64 Linux and needs BAML 0.16, `cargo`, `curl`, and
+`sha256sum`. On a Manjaro CUDA system without cuDNN 9, it also uses `bsdtar`,
+`pacman`, and `pacman-key` to install a verified local copy. A CPU-only system
+skips every CUDA setup step. Audio capture needs `pw-record` or `ffmpeg`; Sway
+typing needs `wtype`.
 
 ```bash
 ./install.sh
@@ -101,8 +101,10 @@ baml generate
 cargo test
 ```
 
-Build the executable with `cargo build --release`. The checked-in generated
-Rust SDK embeds the BAML bytecode, so release builds do not invoke BAML.
+The generated Rust SDK is ignored by Git. Run `baml generate` before a direct
+Cargo build. The installer performs that step automatically. The generated SDK
+embeds BAML bytecode, so the installed executable does not invoke the BAML
+toolchain.
 
 The process split is intentionally small. Rust starts one BAML application
 function and injects typed callbacks for process signalling and Parakeet

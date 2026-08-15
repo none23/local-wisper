@@ -1,4 +1,5 @@
 target/
+/baml_sdk/
 *.wav
 __pycache__/
 *.py[cod]

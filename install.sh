@@ -18,13 +18,15 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
   exit 1
 fi
 
-for lw_command in cargo curl readlink sha256sum; do
+for lw_command in baml cargo curl readlink sha256sum; do
   if ! command -v "${lw_command}" >/dev/null 2>&1; then
     echo "Missing required command: ${lw_command}" >&2
     exit 1
   fi
 done
 
+echo "Generating the BAML Rust SDK..."
+baml generate -q --project "${lw_project_dir}"
 echo "Building the release binary..."
 cargo build --release --locked --manifest-path "${lw_project_dir}/Cargo.toml"
 
