@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img">
+  <title>Local Wisper</title>
+  <rect width="256" height="256" rx="56" fill="#101017"/>
+  <path
+    d="m45 66 55 55-55 63"
+    fill="none"
+    stroke="#fff7ea"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="25"
+  />
+  <rect x="126" y="99" width="28" height="60" rx="14" fill="#ff604b"/>
+  <rect x="166" y="57" width="29" height="129" rx="14.5" fill="#ff604b"/>
+  <rect x="207" y="89" width="28" height="95" rx="14" fill="#ff604b"/>
+  <rect x="102" y="178" width="33" height="32" rx="6" fill="#dfff00"/>
+</svg>
