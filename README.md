@@ -1,76 +1,72 @@
 # Local Wisper
 
-Local speech-to-text for Linux. Record from the command line or a desktop keybinding, transcribe locally with NVIDIA Parakeet or Whisper, and deliver the result to the clipboard or the focused window.
+Local speech-to-text for x86_64 Linux. Record from the command line or a Sway
+keybinding, transcribe locally with NVIDIA Parakeet, and send the result to the
+clipboard or focused window.
 
-Local Wisper keeps the transcription model warm in a background daemon, which makes repeated recordings and integrations such as Sway and Neovim much faster.
+Local Wisper keeps one model warm for fast repeated transcription. It selects
+FP16 CUDA inference when CUDA works and falls back to INT8 CPU inference. Users
+do not need to choose a model, device, or weight format.
+
+This release is experimental. It installs a native `lw` executable and does
+not need Python during normal use. Faster Whisper is no longer supported.
 
 ## Requirements
 
-- Linux
-- Python 3 with virtual environment support
-- `pw-record` (PipeWire) or `ffmpeg` with PulseAudio input support
+- x86_64 Linux
+- `pw-record` or `ffmpeg` for audio capture
 - `wl-copy`, `xclip`, or `xsel` for clipboard output
-- `wtype` when typing directly into a Wayland window
-- NVIDIA GPU support is optional; CPU transcription works out of the box
+- `wtype` for typing into the focused Sway window
+- BAML 0.16, `cargo`, `curl`, and `sha256sum` to build and install
+
+An NVIDIA GPU is optional. Systems without working CUDA use the CPU
+automatically.
 
 ## Install
 
 ```bash
 git clone https://github.com/none23/local-wisper.git
 cd local-wisper
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
 ./install.sh
+lw preload
 ```
 
 The installer creates:
 
-- `~/.local/bin/lw`, pointing at this checkout and its virtual environment
-- `~/.config/local-wisper/env`, containing integration defaults
-- `~/.config/local-wisper/glossary.txt`, containing reusable transcript corrections
+- `~/.local/bin/lw`
+- `~/.config/local-wisper/env`
+- `~/.config/local-wisper/glossary.txt`
 
-Existing configuration files are left untouched. Make sure `~/.local/bin` is in `PATH`, then run:
+It leaves existing configuration files untouched. Make sure `~/.local/bin` is
+in `PATH`.
 
-```bash
-lw --help
-```
+The first `lw preload` downloads and verifies the Parakeet files for the
+selected device. Later commands reuse the same cached files and warm model.
+Local Wisper allows only one model process per user to avoid duplicate RAM or
+VRAM use.
+
+On a Manjaro system with an NVIDIA GPU, the installer can place a private copy
+of cuDNN 9 under `~/.local/lib/local-wisper` when the system does not provide
+it. CPU-only systems skip CUDA setup. Normal use needs neither Python, Cargo,
+nor the BAML CLI.
 
 ## Usage
 
-Start an interactive recording session:
-
-```bash
-lw --backend parakeet --device cuda --compute-type float16 --no-vad-filter
-```
-
-Press Enter to finish recording. The transcript is copied to the clipboard, and the model remains available through the background daemon for the next recording.
-
-Whisper on CPU:
-
-```bash
-lw --backend whisper --model small --compute-type int8 --device cpu
-```
-
-Useful commands:
-
-- `lw`: record interactively and transcribe
-- `lw preload`: start the daemon and load the model ahead of time
+- `lw`: record until Enter, transcribe, print the result, and copy it
+- `lw preload`: load the model before the first recording
 - `lw sway-start`: begin a detached recording
-- `lw sway-stop`: stop a detached recording and deliver its transcript
-- `lw sway-cancel`: discard a detached recording
-- `lw sway-toggle`: start or stop a detached recording
+- `lw sway-stop`: stop, transcribe, and deliver the recording
+- `lw sway-cancel`: discard the active Sway recording
 
-Run `lw --help` for recording, daemon, output, and post-processing options.
+Run `lw --help` to print the command summary.
 
 ## Sway integration
 
-The supplied wrapper reads `~/.config/local-wisper/env`, forwards its settings to `lw`, and uses `wtype` to type completed transcripts into the focused window.
-
-For a new Sway setup, copy it into your configuration:
+Install the supplied wrapper:
 
 ```bash
-install -Dm755 integrations/sway/local-wisper.sh ~/.config/sway/scripts/local-wisper.sh
+install -Dm755 integrations/sway/local-wisper.sh \
+  ~/.config/sway/scripts/local-wisper.sh
 ```
 
 A minimal Sway configuration looks like this:
@@ -90,21 +86,21 @@ mode "$mode_local_wisper" {
 bindsym $mod+grave exec $local_wisper sway-start, mode "$mode_local_wisper"
 ```
 
-The generated environment file defaults to Parakeet on CUDA with direct typing. Common overrides are:
+The wrapper reads `~/.config/local-wisper/env` and types completed transcripts
+into the focused window by default. Existing Sway wrappers remain compatible.
 
-```bash
-export LW_BACKEND='parakeet'
-export LW_COMPUTE_TYPE='float16'
-export LW_DEVICE='cuda'
-export LW_VAD_FILTER='false'
-export LW_OUTPUT_MODE='type' # use "clipboard" to disable wtype output
-```
-
-Sway users upgrading an existing checkout do not need to copy the new wrapper or run the installer again. The existing wrapper continues to call the unchanged `lw` command and `LW_*` interface.
+Speech-to-text works better as a system-level feature than an editor feature,
+so this version removes the Neovim plugin. Sway is the only bundled
+integration.
 
 ## Transcript cleanup
 
-Local Wisper always performs conservative local cleanup. Optional OpenAI post-processing can improve punctuation and recurring technical terms. Luna post-processing runs with reasoning disabled:
+Local cleanup handles spoken decimals, phrases such as `numeric three`,
+statement formatting, and deterministic glossary replacements.
+
+Optional OpenAI cleanup improves punctuation and recurring technical terms.
+When enabled, transcripts with six or more words are sent to `gpt-5.6-luna`.
+Add the following values to `~/.config/local-wisper/env`:
 
 ```bash
 export OPENAI_API_KEY='...'
@@ -113,7 +109,8 @@ export LW_POST_PROCESS_TIMEOUT='20'
 export LW_POST_PROCESS_GLOSSARY_FILE="$HOME/.config/local-wisper/glossary.txt"
 ```
 
-The glossary supports four sections:
+If model cleanup fails or reaches the deadline, Local Wisper returns the local
+result. The glossary supports four sections:
 
 ```text
 [always]
@@ -127,95 +124,49 @@ codecs -> Codex
 
 [terms]
 TypeScript
-TanStack Query
 ```
 
-- `[always]` applies deterministic, case-insensitive local replacements.
-- `[likely]` asks model post-processing to prefer the replacement unless context contradicts it.
-- `[contextual]` applies only when the surrounding text supports the replacement.
-- `[terms]` supplies preferred spelling and capitalization without inserting absent terms.
+- `[always]` applies a local replacement every time.
+- `[likely]` asks model cleanup to prefer the replacement.
+- `[contextual]` applies when the surrounding text supports it.
+- `[terms]` supplies preferred spelling and capitalization.
 
-Mappings use `recognized phrase -> intended output`. Blank lines and lines beginning with `#` are ignored. Existing unsectioned glossary files remain supported as legacy prompt text.
+## Performance
 
-## Neovim integration
+On the development machine, an 11.04-second recording took 0.36 seconds with
+FP16 CUDA and 0.80 seconds with INT8 CPU. The CPU model process used about 1 GB
+of memory. Results depend on the machine.
 
-Neovim support remains available as an optional integration. With lazy.nvim:
+## Technical notes
 
-```lua
-{
-  "none23/local-wisper",
-  config = function()
-    require("lw").setup({
-      backend = "parakeet",
-      device = "cpu",
-      vad_filter = false,
-      sample_rate = 16000,
-      post_process_model = "gpt-5.6-luna",
-      post_process_glossary_file = "~/.config/local-wisper/glossary.txt",
-    })
+The `lw` executable runs the application in BAML and uses a small Rust host for
+native Parakeet ONNX inference and Linux process operations. A per-user model
+service keeps Parakeet warm. Its authenticated loopback endpoint is available
+only through a private user runtime directory.
 
-    vim.keymap.set("n", "<leader>lw", "<cmd>LW<CR>", { desc = "Local Speech" })
-  end,
-}
-```
-
-Use `:LW` to start recording, then press Enter to stop and insert the transcript below the cursor. Use `:LWInstallDeps` to install dependencies manually.
-
-If a Python environment is not configured, the plugin creates one at `stdpath("data") .. "/lw.nvim/.venv"` on first use. The first dependency installation and model preload can take several minutes.
-
-Setup options:
-
-- `python_bin`: explicit Python executable; disables automatic dependency bootstrap
-- `venv_dir`: custom plugin virtual environment directory
-- `auto_install_deps`: install missing dependencies automatically; default `true`
-- `backend`: `parakeet` or `whisper`; default `parakeet`
-- `model`: model name or path
-- `compute_type`: backend compute type
-- `device`: inference device; default `cpu`
-- `vad_filter`: enable voice activity detection; default `true`
-- `sample_rate`: recording sample rate; default `16000`
-- `recorder_cmd`: custom recording command prefix
-- `preload_on_setup`: warm the daemon during `setup()`; default `true`
-- `post_process_model`: optional OpenAI text model
-- `post_process_prompt`: custom cleanup prompt
-- `post_process_glossary_file`: correction glossary path
-- `post_process_timeout`: cleanup timeout in seconds; default `20`
-
-## Upgrading from the Neovim-first layout
-
-No system changes are required after merging or pulling this restructure:
-
-- Existing `~/.local/bin/lw` launchers still execute the root `wisper_cli.py` compatibility entry point.
-- Existing root `.venv` environments remain in the same location.
-- Existing Sway scripts continue using the same commands, environment variables, configuration, state, and cache paths.
-- Neovim plugin managers still discover `plugin/lw.lua` and `lua/lw/init.lua` at the repository root.
-- `require("lw")`, `:LW`, `:LWInstallDeps`, and all setup options are unchanged.
-
-Update the checkout with `git pull`, or update the plugin through the normal Neovim plugin-manager command. You do not need to rerun `install.sh`, reinstall Python dependencies, or modify Sway or Neovim configuration.
-
-Rerun `install.sh` only if the checkout itself is moved to another directory, because the installed `lw` launcher intentionally stores absolute paths to the checkout and its virtual environment.
-
-## Performance notes
-
-- Parakeet with `device = "cuda"`, `compute_type = "float16"`, and VAD disabled is generally the lowest-latency configuration on a supported NVIDIA GPU.
-- The installed PyTorch wheel supplies the CUDA runtime used by Parakeet; Local Wisper discovers and preloads its NVIDIA libraries automatically.
-- Whisper works on CPU out of the box. Whisper CUDA may require a separate CTranslate2-compatible CUDA runtime.
-- The daemon socket and Sway recording state remain under `~/.cache/lw.nvim`, or `$XDG_CACHE_HOME/lw.nvim` when set.
-
-## Troubleshooting
-
-- Recording fails: install `pw-record`, or install `ffmpeg` with PulseAudio support.
-- Clipboard delivery fails: install `wl-clipboard`, `xclip`, or `xsel`.
-- Sway typing fails: install `wtype` and keep `LW_OUTPUT_MODE=type`.
-- Neovim dependency installation fails: check `:messages`, ensure `python3` is available, and rerun `:LWInstallDeps`.
-- A moved checkout makes `lw` fail: run `./install.sh` again from the new checkout location.
+The model files are pinned and verified before use. A per-user lock covers
+model selection, download, and loading so concurrent commands cannot create a
+second model process.
 
 ## Development
 
-The primary Python application lives in `local_wisper/`. Stable launchers remain at `wisper_cli.py` and `scripts/` for existing installations. Optional integrations live in `integrations/`, with the small root `lua/` and `plugin/` adapters required by Neovim's runtime discovery.
-
-Run the Python tests with:
+Install `pre-commit` and `shellcheck`, then enable the fast local checks:
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py' -v
+pre-commit install
+pre-commit run --all-files
 ```
+
+After changing a `.baml` file, run:
+
+```bash
+baml fmt
+baml check
+baml test
+baml generate
+cargo test
+```
+
+The generated Rust SDK is build output and is not committed. Run
+`baml generate` before a direct Cargo build. The installer performs this step
+automatically.

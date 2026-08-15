@@ -1,0 +1,7 @@
+[package]
+name = "local-wisper"
+
+[generator.client1]
+output_type = "rust"
+naming_convention = "preserve-case"
+output_dir = "."

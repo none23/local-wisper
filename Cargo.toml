@@ -1,0 +1,22 @@
+[package]
+name = "local-wisper"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "lw"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+baml_sdk = { path = "baml_sdk" }
+fs2 = "0.4"
+libc = "0.2"
+libloading = "0.8"
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["api-28", "copy-dylibs", "cuda", "download-binaries", "ndarray", "std"] }
+parakeet-rs = { version = "=0.3.7", default-features = false, features = ["api-28", "cuda", "ort-defaults"] }
+
+[profile.release]
+lto = "thin"
+strip = true

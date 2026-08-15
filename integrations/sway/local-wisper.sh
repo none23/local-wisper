@@ -10,8 +10,8 @@ fi
 LW_BIN="${LW_BIN:-$(command -v lw || true)}"
 LW_BACKEND="${LW_BACKEND:-parakeet}"
 LW_MODEL="${LW_MODEL:-}"
-LW_COMPUTE_TYPE="${LW_COMPUTE_TYPE:-float16}"
-LW_DEVICE="${LW_DEVICE:-cuda}"
+LW_COMPUTE_TYPE="${LW_COMPUTE_TYPE:-}"
+LW_DEVICE="${LW_DEVICE:-auto}"
 LW_SAMPLE_RATE="${LW_SAMPLE_RATE:-16000}"
 LW_VAD_FILTER="${LW_VAD_FILTER:-false}"
 LW_OUTPUT_MODE="${LW_OUTPUT_MODE:-type}"
@@ -56,7 +56,7 @@ else
 fi
 
 case "${1:-}" in
-  sway-stop|sway-toggle)
+  sway-stop)
     if [[ "${LW_OUTPUT_MODE}" == "type" ]]; then
       args+=(--type-output)
     fi

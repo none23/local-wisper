@@ -1,16 +1,10 @@
-# Python cache/artifacts
+target/
+/baml_sdk/
+*.wav
 __pycache__/
 *.py[cod]
-*.pyo
-
-# Virtual environments
 .venv/
-venv/
 
-# Local runtime outputs
-wisper_recording_*.wav
-
-# OS/editor noise
 .DS_Store
 *.swp
 *.swo

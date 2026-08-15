@@ -1,0 +1,28 @@
+repos:
+  - repo: local
+    hooks:
+      - id: baml-format
+        name: BAML format
+        entry: baml fmt
+        language: system
+        files: ^baml_src/.*\.baml$
+
+      - id: baml-check
+        name: BAML check
+        entry: baml check -F display_all_warnings
+        language: system
+        pass_filenames: false
+        files: ^(baml\.toml|baml_src/.*\.baml)$
+
+      - id: rust-format
+        name: Rust format
+        entry: cargo fmt
+        language: system
+        pass_filenames: false
+        files: ^(Cargo\.(lock|toml)|src/.*\.rs)$
+
+      - id: shellcheck
+        name: ShellCheck
+        entry: shellcheck
+        language: system
+        files: ^(install\.sh|integrations/.*\.sh)$

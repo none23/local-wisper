@@ -1,0 +1,31 @@
+# Guaranteed local corrections. These also apply to short transcripts.
+[always]
+dot env -> .env
+engine x -> nginx
+package Jason -> package.json
+s de k -> SDK
+
+[likely]
+cloud code -> Claude Code
+java script -> JavaScript
+next jazz -> Next.js
+node jazz -> Node.js
+tail wind -> Tailwind
+type script -> TypeScript
+
+[contextual]
+codecs -> Codex
+
+[terms]
+.env
+BAML
+Claude Code
+JavaScript
+Next.js
+nginx
+Node.js
+OpenAI
+package.json
+React
+Tailwind CSS
+TypeScript
