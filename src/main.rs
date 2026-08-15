@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -45,36 +45,21 @@ fn main() -> Result<()> {
         return daemon::serve(preference);
     }
 
-    // BAML owns the application. This vector only keeps recordings alive until
-    // the BAML workflow has finished transcribing them.
-    let recordings = Arc::new(Mutex::new(Vec::<recording::RecordedAudio>::new()));
-    let interactive_recordings = Arc::clone(&recordings);
-    let sway_recordings = Arc::clone(&recordings);
+    let recorders = Arc::new(recording::RecorderHost::default());
+    let spawn_recorders = Arc::clone(&recorders);
+    let observed_recorders = Arc::clone(&recorders);
+    let stopped_recorders = Arc::clone(&recorders);
 
     let exit_code = baml_sdk::run_app(
         std::env::args().skip(1).collect(),
         |device| native(daemon::ensure_ready(device_preference(device))),
         |device| native(daemon::start(device_preference(device))),
-        move || -> std::result::Result<String, NativeError> {
-            let audio = native(recording::record_interactively())?;
-            let path = audio.path().to_string_lossy().into_owned();
-            interactive_recordings
-                .lock()
-                .map_err(|_| NativeError("recording owner lock was poisoned".to_owned()))?
-                .push(audio);
-            Ok(path)
+        || native(paths::runtime_dir().map(|path| path.to_string_lossy().into_owned())),
+        move |backend, audio_path, log_path| {
+            native(spawn_recorders.spawn(backend, audio_path, log_path))
         },
-        || native(recording::sway_start()),
-        move || -> std::result::Result<String, NativeError> {
-            let audio = native(recording::sway_stop())?;
-            let path = audio.path().to_string_lossy().into_owned();
-            sway_recordings
-                .lock()
-                .map_err(|_| NativeError("recording owner lock was poisoned".to_owned()))?
-                .push(audio);
-            Ok(path)
-        },
-        || native(recording::sway_cancel()),
+        move |process| native(observed_recorders.exists(process)),
+        move |process, backend| native(stopped_recorders.stop(process, backend)),
         |audio_path: String, device| {
             native(daemon::transcribe(
                 PathBuf::from(audio_path).as_path(),

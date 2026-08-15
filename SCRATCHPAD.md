@@ -163,13 +163,20 @@ into BAML. Rust should finish as a small owner of the live `ParakeetTDT` object,
 CUDA/ONNX setup, a per-user OS lock, and any Linux process operations that BAML
 cannot express safely. Line count is not the goal; application ownership is.
 
+BAML now also owns recorder selection, session paths, persisted Sway state,
+interactive recording, start/stop/cancel behavior, audio validation, and
+cleanup. The native recorder callback is limited to spawning and signalling a
+Linux process. Persisted process identities contain both PID and `/proc` start
+time, preventing stale state from signalling an unrelated process after PID
+reuse.
+
 The deterministic cleanup is implemented in Rust because BAML has no regular
 expression support suitable for the established boundary-aware rules. BAML
 owns the six-word decision and the complete `gpt-5.6-luna` prompt. Native tests
 cover spoken decimals, `numeric` phrases, non-cascading `[always]` rules,
 glossary validation, statement style, identifiers, questions, and non-Latin
 text. A one-second `sway-start`/`sway-stop` capture also completed through the
-new recorder and BAML plan; the empty recording correctly reported no speech.
+earlier workflow; the empty recording correctly reported no speech.
 
 Model assets are pinned to Hugging Face revision
 `f88260fa0777fe0868dda6df85d1a98f012a4a7a`. The cache records exact sizes and
