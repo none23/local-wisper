@@ -49,14 +49,19 @@ function glossary_section(name: string, line_number: int) -> GlossarySection {
 }
 
 function parse_glossary(raw: string) -> Glossary {
-    let has_sections = raw.lines().some((original) => {
+    let has_sections = raw.lines().some((original) -> {
         let line = original.trim();
         line.starts_with("[") && line.ends_with("]")
     });
     if (!has_sections) {
         let value = raw.trim();
         let glossary = empty_glossary();
-        glossary.legacy = if (value == "") { null } else { value };
+        glossary.legacy
+            = if (value == "") {
+                null
+            } else {
+                value
+            };
         return glossary;
     }
 
@@ -85,15 +90,12 @@ function parse_glossary(raw: string) -> Glossary {
             continue;
         }
 
-        let arrow = line.index_of("->") ?? invalid_argument(
-            `glossary entry on line ${line_number} must use 'source -> replacement'`,
-        );
+        let arrow = line.index_of("->")
+            ?? invalid_argument(`glossary entry on line ${line_number} must use 'source -> replacement'`);
         let source = line.substring(0, arrow).trim();
         let replacement = line.substring(arrow + 2, line.length()).trim();
         if (source == "" || replacement == "") {
-            invalid_argument(
-                `glossary entry on line ${line_number} has an empty source or replacement`,
-            )
+            invalid_argument(`glossary entry on line ${line_number} has an empty source or replacement`)
         }
         let normalized = source.to_lower_case();
         if (seen_sources.has(normalized)) {
@@ -102,9 +104,18 @@ function parse_glossary(raw: string) -> Glossary {
         seen_sources.set(normalized, true);
         let rule = GlossaryRule { source: source, replacement: replacement };
         match (section) {
-            GlossarySection.Always => { glossary.always.push(rule); null },
-            GlossarySection.Likely => { glossary.likely.push(rule); null },
-            GlossarySection.Contextual => { glossary.contextual.push(rule); null },
+            GlossarySection.Always => {
+                glossary.always.push(rule);
+                null
+            },
+            GlossarySection.Likely => {
+                glossary.likely.push(rule);
+                null
+            },
+            GlossarySection.Contextual => {
+                glossary.contextual.push(rule);
+                null
+            },
             GlossarySection.Terms => null,
         };
     }
@@ -269,12 +280,16 @@ function parse_spoken_number(words: string[]) -> int? {
         }
         index += 1;
     }
-    if (saw_number) { current } else { null }
+    if (saw_number) {
+        current
+    } else {
+        null
+    }
 }
 
 function spans_are_connected(text: string, left: WordSpan, right: WordSpan) -> bool {
     let separator = text.substring(left.end, right.start);
-    separator.chars().every((character) => {
+    separator.chars().every((character) -> {
         character.is_whitespace() || character == "-"
     })
 }
@@ -286,7 +301,9 @@ function decimal_match(text: string, spans: WordSpan[], start: int) -> NumericMa
             return null;
         }
         if (spans[point].text.to_lower_case() == "point") {
-            let integer_words = spans.slice(start, point).map((span) => { span.text });
+            let integer_words = spans.slice(start, point).map((span) -> {
+                span.text
+            });
             if let integer: int = parse_spoken_number(integer_words) {
                 let fraction = "";
                 let end = point + 1;
@@ -316,13 +333,15 @@ function numeric_marker_match(text: string, spans: WordSpan[], start: int) -> Nu
     let end = start + 1;
     while (
         end < spans.length()
-        && end <= start + 6
-        && spans_are_connected(text, spans[end - 1], spans[end])
+            && end <= start + 6
+            && spans_are_connected(text, spans[end - 1], spans[end])
     ) {
         end += 1;
     }
     while (end > start + 1) {
-        let words = spans.slice(start + 1, end).map((span) => { span.text });
+        let words = spans.slice(start + 1, end).map((span) -> {
+            span.text
+        });
         if let number: int = parse_spoken_number(words) {
             return NumericMatch { end_word: end, replacement: `${number}` };
         }
@@ -361,11 +380,15 @@ function correction_matches(text: string, index: int, source: string) -> bool {
 }
 
 function apply_guaranteed_corrections(text: string, rules: GlossaryRule[]) -> string {
-    let ordered = rules.sort_by_key((rule) => { rule.source.length() }).reverse();
+    let ordered = rules
+        .sort_by_key((rule) -> {
+            rule.source.length()
+        })
+        .reverse();
     let output = "";
     let index = 0;
     while (index < text.length()) {
-        let rule = ordered.find((candidate) => {
+        let rule = ordered.find((candidate) -> {
             correction_matches(text, index, candidate.source)
         });
         if let matched: GlossaryRule = rule {
@@ -430,7 +453,11 @@ function starts_with_personal_i(text: string, start: int, end: int) -> bool {
     if (rest == "") {
         return true;
     }
-    if (["'m", "'ve", "'ll", "'d"].some((prefix) => { rest.starts_with(prefix) })) {
+    if (
+        ["'m", "'ve", "'ll", "'d"].some((prefix) -> {
+            rest.starts_with(prefix)
+        })
+    ) {
         return true;
     }
     let next = rest.trim_start();
@@ -438,14 +465,41 @@ function starts_with_personal_i(text: string, start: int, end: int) -> bool {
         return false;
     }
     let verbs = [
-        "mean", "think", "guess", "believe", "know", "want", "need", "will", "would",
-        "can", "could", "should", "am", "was", "have", "had", "do", "did", "feel",
-        "see", "understand", "don't", "dont", "can't", "cant", "won't", "wont",
-        "wouldn't", "wouldnt", "shouldn't", "shouldnt",
+        "mean",
+        "think",
+        "guess",
+        "believe",
+        "know",
+        "want",
+        "need",
+        "will",
+        "would",
+        "can",
+        "could",
+        "should",
+        "am",
+        "was",
+        "have",
+        "had",
+        "do",
+        "did",
+        "feel",
+        "see",
+        "understand",
+        "don't",
+        "dont",
+        "can't",
+        "cant",
+        "won't",
+        "wont",
+        "wouldn't",
+        "wouldnt",
+        "shouldn't",
+        "shouldnt",
     ];
-    verbs.some((verb) => {
+    verbs.some((verb) -> {
         next == verb
-        || (next.starts_with(verb) && !is_boundary_character(next.char_at(verb.length())))
+            || (next.starts_with(verb) && !is_boundary_character(next.char_at(verb.length())))
     })
 }
 
@@ -460,8 +514,11 @@ function capitalize_initial_word(text: string, long_statement: bool) -> string {
         "I"
     } else if (!long_statement && word == "A") {
         "a"
-    } else if (!long_statement && word.char_at(0).is_ascii_uppercase()
-        && word.substring(1, word.length()).is_ascii_lowercase()) {
+    } else if (
+        !long_statement
+            && word.char_at(0).is_ascii_uppercase()
+            && word.substring(1, word.length()).is_ascii_lowercase()
+    ) {
         word.to_lower_case()
     } else if (long_statement && word.is_ascii_lowercase()) {
         word.char_at(0).to_upper_case() + word.substring(1, word.length())
@@ -473,11 +530,11 @@ function capitalize_initial_word(text: string, long_statement: bool) -> string {
 
 function normalize_short_statement_style(text: string) -> string {
     if (
-        text.chars().some((character) => {
+        text.chars().some((character) -> {
             character.is_alphabetic() && !character.is_ascii_alphabetic()
         })
-        || text.includes("?")
-        || sentence_end_count(text) >= 2
+            || text.includes("?")
+            || sentence_end_count(text) >= 2
     ) {
         return text;
     }
@@ -486,9 +543,11 @@ function normalize_short_statement_style(text: string) -> string {
     let suffix = text.substring(suffix_start, text.length());
     if (word_count(text) > 10) {
         let styled = capitalize_initial_word(body, true);
-        let punctuation = if (
-            styled == "" || styled.ends_with(".") || styled.ends_with("!") || styled.ends_with("?")
-        ) { "" } else { "." };
+        let punctuation = if (styled == "" || styled.ends_with(".") || styled.ends_with("!") || styled.ends_with("?")) {
+            ""
+        } else {
+            "."
+        };
         return styled + punctuation + suffix;
     }
     let without_period = if (body.ends_with(".")) {
@@ -508,7 +567,11 @@ function script_counts(text: string) -> int[] {
     let non_latin = 0;
     for (let character in text.chars()) {
         if (character.is_alphabetic()) {
-            if (character.is_ascii_alphabetic()) { latin += 1 } else { non_latin += 1 }
+            if (character.is_ascii_alphabetic()) {
+                latin += 1
+            } else {
+                non_latin += 1
+            }
         }
     }
     [latin, non_latin]
@@ -519,16 +582,13 @@ function looks_like_unwanted_non_latin_translation(source: string, processed: st
     let processed_counts = script_counts(processed);
     let allowed_growth = 6.max(source_counts[1] * 2);
     source_counts[0] > 0
-    && processed_counts[1] > 0
-    && processed_counts[1] > processed_counts[0]
-    && processed_counts[1] > source_counts[1] + allowed_growth
+        && processed_counts[1] > 0
+        && processed_counts[1] > processed_counts[0]
+        && processed_counts[1] > source_counts[1] + allowed_growth
 }
 
 function model_clean_attempt(transcript: string, glossary: string) -> ModelCleanAttempt {
-    ModelCleanAttempt {
-        result: clean_transcript(transcript, glossary),
-        timed_out: false,
-    }
+    ModelCleanAttempt { result: clean_transcript(transcript, glossary), timed_out: false }
 }
 
 function timeout_attempt(timeout_ms: int) -> ModelCleanAttempt {
@@ -558,16 +618,11 @@ function process_transcript(
     let raw_word_count = word_count(text);
     let glossary = load_glossary(glossary_file) catch_all (error) {
         _ => {
-            baml.io.eprintln(
-                `Warning: ${error.to_string()}; using local cleanup without glossary.`,
-            );
+            baml.io.eprintln(`Warning: ${error.to_string()}; using local cleanup without glossary.`);
             empty_glossary()
         },
     };
-    let prepared = apply_guaranteed_corrections(
-        normalize_spoken_numerics(text),
-        glossary.always,
-    );
+    let prepared = apply_guaranteed_corrections(normalize_spoken_numerics(text), glossary.always);
     let local = normalize_short_statement_style(prepared);
     if (!should_clean_with_model(raw_word_count, model_enabled)) {
         return local;
@@ -598,10 +653,7 @@ function process_transcript(
 test "BAML normalizes spoken numbers" {
     assert.equal(normalize_spoken_numerics("zero point one"), "0.1");
     assert.equal(normalize_spoken_numerics("version twelve point zero"), "version 12.0");
-    assert.equal(
-        normalize_spoken_numerics("one hundred and five point six"),
-        "105.6",
-    );
+    assert.equal(normalize_spoken_numerics("one hundred and five point six"), "105.6");
     assert.equal(normalize_spoken_numerics("numeric twenty one"), "21");
     assert.equal(normalize_spoken_numerics("one and two point three"), "one and 2.3")
 }
@@ -620,7 +672,10 @@ test "BAML guaranteed rules are boundary aware and do not cascade" {
 
 test "BAML preserves established statement style" {
     assert.equal(normalize_final_transcript("Fair point."), "fair point");
-    assert.equal(normalize_final_transcript("Because it will be simpler this way."), "because it will be simpler this way");
+    assert.equal(
+        normalize_final_transcript("Because it will be simpler this way."),
+        "because it will be simpler this way",
+    );
     assert.equal(normalize_final_transcript("Version zero point one."), "version 0.1");
     assert.equal(normalize_final_transcript("A fair point."), "a fair point");
     assert.equal(normalize_final_transcript("i mean"), "I mean");
@@ -635,7 +690,10 @@ test "BAML preserves established statement style" {
         normalize_final_transcript("That's a fair point. Let's go with this approach."),
         "That's a fair point. Let's go with this approach.",
     );
-    assert.equal(normalize_final_transcript("Хорошая мысль."), "Хорошая мысль.");
+    assert.equal(
+        normalize_final_transcript("Хорошая мысль."),
+        "Хорошая мысль.",
+    );
     assert.equal(
         normalize_final_transcript("because it will be simpler this way and it reduces complexity overall"),
         "Because it will be simpler this way and it reduces complexity overall.",
@@ -659,8 +717,8 @@ test "BAML parses the system glossary shape" {
 }
 
 test "BAML rejects duplicate glossary sources" {
-    let failed = parse_glossary(
-        "[always]\ncodecs -> Codex\n[contextual]\ncodecs -> Codex",
-    ) catch_all (error) { _ => true };
+    let failed = parse_glossary("[always]\ncodecs -> Codex\n[contextual]\ncodecs -> Codex") catch_all (error) {
+        _ => true
+    };
     assert.equal(failed, true)
 }

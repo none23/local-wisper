@@ -49,8 +49,7 @@ function CleanTranscript(transcript: string, glossary: string) -> string {
     `
 }
 
-// The Rust generator cannot expose the AI client's internal error union.
-// Turn model failures into typed data at the BAML boundary.
+// Keep model failures as typed data so the workflow can apply its local fallback.
 function clean_transcript(transcript: string, glossary: string) -> CleanResult {
     let cleaned = CleanTranscript(transcript, glossary) catch_all (error) {
         _ => {

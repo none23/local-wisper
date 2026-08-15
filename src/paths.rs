@@ -1,49 +1,39 @@
-use std::env;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
-pub fn cache_root() -> Result<PathBuf> {
-    let root = if let Some(path) = env::var_os("XDG_CACHE_HOME") {
-        PathBuf::from(path)
-    } else if let Some(home) = env::var_os("HOME") {
-        PathBuf::from(home).join(".cache")
-    } else {
-        bail!("HOME or XDG_CACHE_HOME is required")
-    };
-    Ok(root.join("local-wisper"))
-}
-
-pub fn model_dir(name: &str) -> Result<PathBuf> {
-    Ok(cache_root()?.join("models").join(name))
-}
-
 pub fn runtime_dir() -> Result<PathBuf> {
-    let path = match env::var_os("XDG_RUNTIME_DIR") {
-        Some(root) => PathBuf::from(root).join("local-wisper"),
-        None => cache_root()?.join("runtime"),
+    let uid = unsafe { libc::geteuid() };
+    let system_runtime = PathBuf::from(format!("/run/user/{uid}"));
+    let path = if system_runtime.is_dir() {
+        system_runtime.join("local-wisper")
+    } else {
+        PathBuf::from(format!("/tmp/local-wisper-{uid}"))
     };
-    fs::create_dir_all(&path)
-        .with_context(|| format!("failed to create runtime directory {}", path.display()))?;
+    match fs::create_dir(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to create runtime directory {}", path.display()));
+        }
+    }
+    let metadata = fs::symlink_metadata(&path)
+        .with_context(|| format!("failed to inspect runtime directory {}", path.display()))?;
+    if !metadata.is_dir() || metadata.uid() != uid {
+        bail!(
+            "runtime path {} is not a directory owned by user {uid}",
+            path.display()
+        )
+    }
     fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
         .with_context(|| format!("failed to secure runtime directory {}", path.display()))?;
     Ok(path)
 }
 
-pub fn socket_path() -> Result<PathBuf> {
-    Ok(runtime_dir()?.join("daemon.sock"))
-}
-
 pub fn daemon_lock_path() -> Result<PathBuf> {
     Ok(runtime_dir()?.join("daemon.lock"))
-}
-
-pub fn daemon_error_path() -> Result<PathBuf> {
-    Ok(runtime_dir()?.join("daemon.error"))
-}
-
-pub fn daemon_log_path() -> Result<PathBuf> {
-    Ok(cache_root()?.join("daemon.log"))
 }

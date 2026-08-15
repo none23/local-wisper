@@ -18,10 +18,11 @@ CPU if CUDA cannot initialize the model.
 
 ## Install
 
-The installer targets x86_64 Linux and needs `cargo` and `curl`. On a Manjaro
-CUDA system without cuDNN 9, it also uses `bsdtar`, `pacman`, and `pacman-key`
-to install a verified local copy. A CPU-only system skips every CUDA setup
-step. Audio capture needs `pw-record` or `ffmpeg`; Sway typing needs `wtype`.
+The installer targets x86_64 Linux and needs `cargo`, `curl`, and `sha256sum`.
+On a Manjaro CUDA system without cuDNN 9, it also uses `bsdtar`, `pacman`, and
+`pacman-key` to install a verified local copy. A CPU-only system skips every
+CUDA setup step. Audio capture needs `pw-record` or `ffmpeg`; Sway typing needs
+`wtype`.
 
 ```bash
 ./install.sh
@@ -41,6 +42,11 @@ pinned Parakeet files, verifies their sizes and SHA-256 hashes, and leaves one
 daemon running for the user. Later commands reuse the same model and cache.
 The exclusive user lock covers detection, download, and model loading, so an
 automatic fallback cannot overlap two model instances.
+
+The warm model service is implemented in BAML over an authenticated ephemeral
+loopback endpoint. Its address and random token live in the user's mode-0700
+runtime directory. Rust retains only the OS lock and the live ONNX model behind
+typed callbacks.
 
 ## Commands
 
@@ -88,6 +94,7 @@ left untouched by the installer.
 When a `.baml` file changes:
 
 ```bash
+baml fmt
 baml check
 baml test
 baml generate

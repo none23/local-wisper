@@ -1,6 +1,5 @@
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result, bail};
@@ -25,16 +24,6 @@ pub fn prepare_cuda() -> Result<()> {
         .as_ref()
         .map(|_| ())
         .map_err(|error| anyhow::anyhow!(error.clone()))
-}
-
-pub fn cuda_hardware_present() -> bool {
-    Command::new("nvidia-smi")
-        .arg("-L")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
 }
 
 fn load_cudnn() -> Result<Vec<Library>> {

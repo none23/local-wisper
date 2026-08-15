@@ -14,7 +14,7 @@ experimental rewrite. Keep it current while work is in progress.
   language permits it.
 - BAML owns CLI parsing, complete command execution, the decision to use remote
   cleanup, and the OpenAI cleanup prompt. Rust injects typed native callbacks
-  for capabilities that have not yet moved into BAML.
+  for the OS and inference capabilities BAML cannot express robustly.
 - This worktree is experimental. Compatibility with the primary checkout is not
   required beyond the explicitly preserved user-facing workflow.
 
@@ -127,10 +127,10 @@ execution provider. A canonical FP16 export of the exact v3 model is available
 from `ysdede/parakeet-tdt-0.6b-v3-onnx` with the encoder, decoder/joint graph,
 vocabulary, and preprocessing graph expected by the Rust decoder.
 
-The native daemon now holds an exclusive per-user file lock before touching the
-model or binding its socket. This makes the one-model rule structural: racing
-clients can start processes, but only the lock owner can load CUDA state. The
-daemon handles requests serially and keeps that one model warm.
+The native model host holds an exclusive per-user file lock before BAML touches
+model assets or binds its loopback server. This makes the one-model rule
+structural: racing clients can start processes, but only the lock owner can load
+CUDA state. The host serializes inference and keeps that one model warm.
 
 Automatic selection uses a real system check rather than a user-facing model
 choice. An NVIDIA device selects the pinned FP16 export. With no NVIDIA device,
@@ -158,10 +158,10 @@ the Rust bootstrap. The generated Rust bridge supports this direction directly.
 Five concurrent `preload` calls were previously tested against one resident
 Rust process and one CUDA allocation.
 
-The remaining goal is to keep moving implementations behind those callbacks
-into BAML. Rust should finish as a small owner of the live `ParakeetTDT` object,
-CUDA/ONNX setup, a per-user OS lock, and any Linux process operations that BAML
-cannot express safely. Line count is not the goal; application ownership is.
+The final boundary keeps Rust as a small owner of the live `ParakeetTDT` object,
+CUDA/ONNX setup, a per-user OS lock, and Linux process operations BAML cannot
+express safely. Application policy and orchestration live in BAML; line count
+is only a useful signal of that ownership.
 
 BAML now also owns recorder selection, session paths, persisted Sway state,
 interactive recording, start/stop/cancel behavior, audio validation, and
@@ -169,6 +169,28 @@ cleanup. The native recorder callback is limited to spawning and signalling a
 Linux process. Persisted process identities contain both PID and `/proc` start
 time, preventing stale state from signalling an unrelated process after PID
 reuse.
+
+BAML now owns the resident-service protocol and model preparation as well. It
+selects FP16 CUDA or INT8 CPU, downloads and verifies the pinned assets, manages
+daemon readiness and request deadlines, and serves authenticated HTTP on an
+ephemeral loopback port. Rust retains the live `ParakeetTDT`, the canonical
+per-user file lock, cuDNN/ONNX setup, detached process creation, and recorder
+signals. The runtime directory is derived from the numeric user ID rather than
+configuration, so changing `XDG_RUNTIME_DIR` cannot bypass the one-model lock
+on a normal Linux user session.
+
+The new BAML service completed a controlled live handoff on this machine. It
+loaded FP16 on CUDA, exposed `127.0.0.1:42057` with a per-process token, and
+transcribed the 11.04-second fixture correctly. The process held one 2.34 GB
+GPU allocation. The test daemon was then stopped and the installed daemon was
+restored. A simultaneous probe while the installed daemon was resident exited
+before model initialization, confirming the shared OS lock prevents a second
+copy across the old and new service protocols.
+
+The BAML-owned CPU path also completed the same handoff and fixture request. It
+loaded the pinned INT8 export at roughly 1.14 GB RSS, returned the expected
+sentence with the known extra filler tokens, and made no CUDA allocation. The
+installed automatic/CUDA daemon was restored afterward.
 
 BAML now implements deterministic cleanup without regular expressions using a
 typed character scanner. It owns spoken-number normalization, glossary parsing,

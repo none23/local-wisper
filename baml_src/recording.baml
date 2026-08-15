@@ -20,29 +20,21 @@ class RecordedAudio {
     session_dir: string,
 }
 
-function join_path(parent: string, child: string) -> string {
-    if (parent.ends_with("/")) { `${parent}${child}` } else { `${parent}/${child}` }
-}
-
 function recording_state_path(runtime_dir: string) -> string {
     join_path(runtime_dir, "recording.json")
 }
 
-function remove_file_if_present(path: string) -> null {
-    if (baml.fs.exists(path)) {
-        baml.fs.remove(path) catch_all (error) { _ => null }
-    } else {
-        null
+function cleanup_recording_files(state_path: string, state: RecordingState) -> null {
+    remove_file_if_present(state_path);
+    baml.fs.remove_dir_all(state.session_dir) catch_all (error) {
+        _ => null
     }
 }
 
-function cleanup_recording_files(state_path: string, state: RecordingState) -> null {
-    remove_file_if_present(state_path);
-    baml.fs.remove_dir_all(state.session_dir) catch_all (error) { _ => null }
-}
-
 function cleanup_audio(audio: RecordedAudio) -> null {
-    baml.fs.remove_dir_all(audio.session_dir) catch_all (error) { _ => null }
+    baml.fs.remove_dir_all(audio.session_dir) catch_all (error) {
+        _ => null
+    }
 }
 
 function read_recording_state(path: string) -> RecordingState? {
@@ -53,13 +45,7 @@ function read_recording_state(path: string) -> RecordingState? {
 }
 
 function commit_recording_state(path: string, state: RecordingState) -> null {
-    let part = `${path}.part`;
-    let _ = baml.fs.write(part, baml.json.to_string(state));
-    let moved = baml.sys.exec("mv", ["--", part, path], null);
-    if (!moved.ok()) {
-        throw baml.errors.Io { message: `failed to commit recording state ${path}` }
-    }
-    null
+    atomic_write(path, baml.json.to_string(state))
 }
 
 function validate_recorded_audio(audio_path: string) -> null {
@@ -67,6 +53,18 @@ function validate_recorded_audio(audio_path: string) -> null {
         invalid_argument("Recording is empty or too short to transcribe")
     }
     null
+}
+
+function finish_recording(state: RecordingState) -> RecordedAudio {
+    validate_recorded_audio(state.audio_path) catch_all (error) {
+        _ => {
+            baml.fs.remove_dir_all(state.session_dir) catch_all (cleanup_error) {
+                _ => null
+            };
+            throw error;
+        },
+    };
+    RecordedAudio { path: state.audio_path, session_dir: state.session_dir }
 }
 
 function try_start_recorder(
@@ -82,7 +80,9 @@ function try_start_recorder(
     native_recorder_exists: (process: NativeRecorder) -> bool throws baml.errors.HostCallable,
 ) -> RecordingState? {
     let process = native_spawn_recorder(backend, audio_path, log_path) catch_all (error) {
-        _ => { return null; },
+        _ => {
+            return null;
+        },
     };
     let delay = match (backend) {
         RecorderBackend.PwRecord => 250,
@@ -115,19 +115,14 @@ function start_recorder(
     let log_path = join_path(session_dir, "recording.stderr.log");
 
     for (let backend in [RecorderBackend.PwRecord, RecorderBackend.Ffmpeg]) {
-        let state = try_start_recorder(
-            backend,
-            audio_path,
-            log_path,
-            session_dir,
-            native_spawn_recorder,
-            native_recorder_exists,
-        );
+        let state = try_start_recorder(backend, audio_path, log_path, session_dir, native_spawn_recorder, native_recorder_exists);
         if let started: RecordingState = state {
             return started;
         }
     }
-    baml.fs.remove_dir_all(session_dir) catch_all (error) { _ => null };
+    baml.fs.remove_dir_all(session_dir) catch_all (error) {
+        _ => null
+    };
     invalid_argument("Could not start audio capture; install pw-record or ffmpeg")
 }
 
@@ -147,8 +142,7 @@ function record_interactively(
     let state = start_recorder(runtime_dir, native_spawn_recorder, native_recorder_exists);
     let _ = baml.io.input("Recording... Press Enter to stop.\n");
     native_stop_recorder(state.process, state.backend);
-    validate_recorded_audio(state.audio_path);
-    RecordedAudio { path: state.audio_path, session_dir: state.session_dir }
+    finish_recording(state)
 }
 
 function sway_start_recording(
@@ -175,7 +169,9 @@ function sway_start_recording(
     let state = start_recorder(runtime_dir, native_spawn_recorder, native_recorder_exists);
     commit_recording_state(state_path, state) catch_all (error) {
         _ => {
-            native_stop_recorder(state.process, state.backend) catch_all (stop_error) { _ => null };
+            native_stop_recorder(state.process, state.backend) catch_all (stop_error) {
+                _ => null
+            };
             cleanup_recording_files(state_path, state);
             throw error;
         },
@@ -199,8 +195,7 @@ function sway_stop_recording(
     }
     native_stop_recorder(state.process, state.backend);
     remove_file_if_present(state_path);
-    validate_recorded_audio(state.audio_path);
-    RecordedAudio { path: state.audio_path, session_dir: state.session_dir }
+    finish_recording(state)
 }
 
 function sway_cancel_recording(

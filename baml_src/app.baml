@@ -147,10 +147,7 @@ function parse_options(args: string[]) -> AppOptions {
     options
 }
 
-function clean_if_present(
-    transcript: string,
-    options: AppOptions,
-) -> string {
+function clean_if_present(transcript: string, options: AppOptions) -> string {
     if (transcript.trim() == "") {
         baml.io.eprintln("No speech detected.");
         ""
@@ -166,8 +163,10 @@ function clean_if_present(
 
 function run_workflow(
     options: AppOptions,
-    native_ensure_model: (device: DevicePreference) -> null throws baml.errors.HostCallable,
-    native_start_model: (device: DevicePreference) -> null throws baml.errors.HostCallable,
+    native_spawn_daemon: (
+        preference: DevicePreference,
+        log_path: string,
+    ) -> null throws baml.errors.HostCallable,
     native_runtime_dir: () -> string throws baml.errors.HostCallable,
     native_spawn_recorder: (
         backend: RecorderBackend,
@@ -179,24 +178,16 @@ function run_workflow(
         process: NativeRecorder,
         backend: RecorderBackend,
     ) -> null throws baml.errors.HostCallable,
-    native_transcribe: (
-        audio_path: string,
-        device: DevicePreference,
-    ) -> string throws baml.errors.HostCallable,
 ) -> null {
     match (options.command) {
         AppCommand.Record => {
             //# Load once, then let BAML own the record-to-delivery sequence.
-            native_ensure_model(options.device);
-            let audio = record_interactively(
-                native_runtime_dir(),
-                native_spawn_recorder,
-                native_recorder_exists,
-                native_stop_recorder,
-            );
+            let runtime_dir = native_runtime_dir();
+            ensure_model_daemon(runtime_dir, options.device, native_spawn_daemon);
+            let audio = record_interactively(runtime_dir, native_spawn_recorder, native_recorder_exists, native_stop_recorder);
             defer { cleanup_audio(audio) }
             let transcript = clean_if_present(
-                native_transcribe(audio.path, options.device),
+                transcribe_with_daemon(runtime_dir, audio.path, options.device, native_spawn_daemon),
                 options,
             );
             if (transcript != "") {
@@ -207,25 +198,20 @@ function run_workflow(
             }
             null
         },
-        AppCommand.Preload => native_ensure_model(options.device),
+        AppCommand.Preload => {
+            ensure_model_daemon(native_runtime_dir(), options.device, native_spawn_daemon)
+        },
         AppCommand.SwayStart => {
-            sway_start_recording(
-                native_runtime_dir(),
-                native_spawn_recorder,
-                native_recorder_exists,
-                native_stop_recorder,
-            );
-            native_start_model(options.device)
+            let runtime_dir = native_runtime_dir();
+            sway_start_recording(runtime_dir, native_spawn_recorder, native_recorder_exists, native_stop_recorder);
+            start_model_daemon(runtime_dir, options.device, native_spawn_daemon)
         },
         AppCommand.SwayStop => {
-            let audio = sway_stop_recording(
-                native_runtime_dir(),
-                native_recorder_exists,
-                native_stop_recorder,
-            );
+            let runtime_dir = native_runtime_dir();
+            let audio = sway_stop_recording(runtime_dir, native_recorder_exists, native_stop_recorder);
             defer { cleanup_audio(audio) }
             let transcript = clean_if_present(
-                native_transcribe(audio.path, options.device),
+                transcribe_with_daemon(runtime_dir, audio.path, options.device, native_spawn_daemon),
                 options,
             );
             if (transcript != "") {
@@ -243,18 +229,18 @@ function run_workflow(
             }
             null
         },
-        AppCommand.SwayCancel => sway_cancel_recording(
-            native_runtime_dir(),
-            native_recorder_exists,
-            native_stop_recorder,
-        ),
+        AppCommand.SwayCancel => {
+            sway_cancel_recording(native_runtime_dir(), native_recorder_exists, native_stop_recorder)
+        },
     }
 }
 
 function run_app(
     args: string[],
-    native_ensure_model: (device: DevicePreference) -> null throws baml.errors.HostCallable,
-    native_start_model: (device: DevicePreference) -> null throws baml.errors.HostCallable,
+    native_spawn_daemon: (
+        preference: DevicePreference,
+        log_path: string,
+    ) -> null throws baml.errors.HostCallable,
     native_runtime_dir: () -> string throws baml.errors.HostCallable,
     native_spawn_recorder: (
         backend: RecorderBackend,
@@ -266,20 +252,14 @@ function run_app(
         process: NativeRecorder,
         backend: RecorderBackend,
     ) -> null throws baml.errors.HostCallable,
-    native_transcribe: (
-        audio_path: string,
-        device: DevicePreference,
-    ) -> string throws baml.errors.HostCallable,
 ) -> int {
     run_workflow(
         parse_options(args),
-        native_ensure_model,
-        native_start_model,
+        native_spawn_daemon,
         native_runtime_dir,
         native_spawn_recorder,
         native_recorder_exists,
         native_stop_recorder,
-        native_transcribe,
     ) catch_all (error) {
         _ => {
             baml.io.eprintln(error.to_string());
