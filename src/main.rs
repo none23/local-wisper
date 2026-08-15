@@ -6,7 +6,6 @@ use anyhow::{Context, Result};
 
 mod cleanup;
 mod daemon;
-mod delivery;
 mod model;
 mod paths;
 mod recording;
@@ -94,12 +93,6 @@ fn main() -> Result<()> {
                     glossary_file: glossary_file.map(PathBuf::from),
                 },
             ))
-        },
-        |transcript: String, mode| {
-            Ok::<_, NativeError>(match mode {
-                baml_sdk::DeliveryMode::Copy => delivery::copy_text(&transcript),
-                baml_sdk::DeliveryMode::Type => delivery::type_text(&transcript),
-            })
         },
     )
     .context("BAML application failed")?;

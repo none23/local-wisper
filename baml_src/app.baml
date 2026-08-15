@@ -188,7 +188,6 @@ function run_workflow(
         timeout_seconds: float,
         glossary_file: string?,
     ) -> string throws baml.errors.HostCallable,
-    native_deliver: (transcript: string, mode: DeliveryMode) -> bool throws baml.errors.HostCallable,
 ) -> null {
     match (options.command) {
         AppCommand.Record => {
@@ -198,7 +197,7 @@ function run_workflow(
             let transcript = clean_if_present(native_transcribe(audio, options.device), options, native_clean);
             if (transcript != "") {
                 baml.io.println(transcript);
-                if (!native_deliver(transcript, DeliveryMode.Copy)) {
+                if (!deliver_text(transcript, DeliveryMode.Copy)) {
                     baml.io.eprintln("Warning: Could not copy transcript to the clipboard.")
                 }
             }
@@ -219,7 +218,7 @@ function run_workflow(
                 } else {
                     DeliveryMode.Copy
                 };
-                if (!native_deliver(transcript, mode)) {
+                if (!deliver_text(transcript, mode)) {
                     baml.io.eprintln(
                         "Warning: Could not deliver transcript to the focused application.",
                     )
@@ -249,7 +248,6 @@ function run_app(
         timeout_seconds: float,
         glossary_file: string?,
     ) -> string throws baml.errors.HostCallable,
-    native_deliver: (transcript: string, mode: DeliveryMode) -> bool throws baml.errors.HostCallable,
 ) -> int {
     run_workflow(
         parse_options(args),
@@ -261,7 +259,6 @@ function run_app(
         native_sway_cancel,
         native_transcribe,
         native_clean,
-        native_deliver,
     ) catch_all (error) {
         _ => {
             baml.io.eprintln(error.to_string());
