@@ -1019,7 +1019,6 @@ dependencies = [
  "libloading",
  "ort",
  "parakeet-rs",
- "regex",
  "reqwest",
  "serde",
  "serde_json",

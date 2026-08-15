@@ -1,10 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 
-mod cleanup;
 mod daemon;
 mod model;
 mod paths;
@@ -64,19 +62,6 @@ fn main() -> Result<()> {
             native(daemon::transcribe(
                 PathBuf::from(audio_path).as_path(),
                 device_preference(device),
-            ))
-        },
-        |transcript: String,
-         model_enabled: bool,
-         timeout_seconds: f64,
-         glossary_file: Option<String>| {
-            Ok::<_, NativeError>(cleanup::process(
-                &transcript,
-                &cleanup::Options {
-                    model_enabled,
-                    timeout: Duration::from_secs_f64(timeout_seconds),
-                    glossary_file: glossary_file.map(PathBuf::from),
-                },
             ))
         },
     )

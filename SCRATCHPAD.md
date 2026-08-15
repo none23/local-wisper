@@ -47,9 +47,9 @@ experimental rewrite. Keep it current while work is in progress.
 - Ordinary transcription must remain local. Remote tracing is not required.
 - Use BAML's built-in local structured tracing if it works out of the box. Do
   not build another tracing system for this experiment.
-- Ordinary model failures cross the generated bridge as a typed `CleanResult`.
-  The Rust host also handles bridge errors, applies the 20-second deadline, and
-  falls back to local cleanup.
+- Ordinary model failures stay inside BAML as a typed `CleanResult`. BAML races
+  the model call against the configured deadline and falls back to local
+  cleanup without crossing a native callback.
 
 ## Explicit non-goals
 
@@ -170,13 +170,13 @@ Linux process. Persisted process identities contain both PID and `/proc` start
 time, preventing stale state from signalling an unrelated process after PID
 reuse.
 
-The deterministic cleanup is implemented in Rust because BAML has no regular
-expression support suitable for the established boundary-aware rules. BAML
-owns the six-word decision and the complete `gpt-5.6-luna` prompt. Native tests
-cover spoken decimals, `numeric` phrases, non-cascading `[always]` rules,
-glossary validation, statement style, identifiers, questions, and non-Latin
-text. A one-second `sway-start`/`sway-stop` capture also completed through the
-earlier workflow; the empty recording correctly reported no speech.
+BAML now implements deterministic cleanup without regular expressions using a
+typed character scanner. It owns spoken-number normalization, glossary parsing,
+boundary-aware non-cascading `[always]` rules, statement style, language-drift
+protection, the six-word decision, the complete `gpt-5.6-luna` prompt, and the
+timeout race. BAML tests cover the migrated behavior. A one-second
+`sway-start`/`sway-stop` capture also completed through the earlier workflow;
+the empty recording correctly reported no speech.
 
 Model assets are pinned to Hugging Face revision
 `f88260fa0777fe0868dda6df85d1a98f012a4a7a`. The cache records exact sizes and

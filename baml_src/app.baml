@@ -150,18 +150,12 @@ function parse_options(args: string[]) -> AppOptions {
 function clean_if_present(
     transcript: string,
     options: AppOptions,
-    native_clean: (
-        transcript: string,
-        model_enabled: bool,
-        timeout_seconds: float,
-        glossary_file: string?,
-    ) -> string throws baml.errors.HostCallable,
 ) -> string {
     if (transcript.trim() == "") {
         baml.io.eprintln("No speech detected.");
         ""
     } else {
-        native_clean(
+        process_transcript(
             transcript,
             options.post_process_model,
             options.post_process_timeout,
@@ -189,12 +183,6 @@ function run_workflow(
         audio_path: string,
         device: DevicePreference,
     ) -> string throws baml.errors.HostCallable,
-    native_clean: (
-        transcript: string,
-        model_enabled: bool,
-        timeout_seconds: float,
-        glossary_file: string?,
-    ) -> string throws baml.errors.HostCallable,
 ) -> null {
     match (options.command) {
         AppCommand.Record => {
@@ -210,7 +198,6 @@ function run_workflow(
             let transcript = clean_if_present(
                 native_transcribe(audio.path, options.device),
                 options,
-                native_clean,
             );
             if (transcript != "") {
                 baml.io.println(transcript);
@@ -240,7 +227,6 @@ function run_workflow(
             let transcript = clean_if_present(
                 native_transcribe(audio.path, options.device),
                 options,
-                native_clean,
             );
             if (transcript != "") {
                 baml.io.println(transcript);
@@ -284,12 +270,6 @@ function run_app(
         audio_path: string,
         device: DevicePreference,
     ) -> string throws baml.errors.HostCallable,
-    native_clean: (
-        transcript: string,
-        model_enabled: bool,
-        timeout_seconds: float,
-        glossary_file: string?,
-    ) -> string throws baml.errors.HostCallable,
 ) -> int {
     run_workflow(
         parse_options(args),
@@ -300,7 +280,6 @@ function run_app(
         native_recorder_exists,
         native_stop_recorder,
         native_transcribe,
-        native_clean,
     ) catch_all (error) {
         _ => {
             baml.io.eprintln(error.to_string());
