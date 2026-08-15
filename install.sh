@@ -70,6 +70,24 @@ if [[ "${lw_has_nvidia}" == true && ! -f /usr/lib/libcudnn.so.9 && ! -f "${lw_li
   trap - EXIT
 fi
 
+# Stage complete files beside their destinations. The running installation is
+# untouched until every build artifact is ready, and the executable moves last.
+lw_stage_suffix=".part-$$"
+lw_staged_target="${lw_target}${lw_stage_suffix}"
+lw_cleanup_staging() {
+  rm -f -- "${lw_staged_target}"
+  for lw_staged_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
+    rm -f -- "${lw_lib_dir}/${lw_staged_library}${lw_stage_suffix}"
+  done
+}
+trap lw_cleanup_staging EXIT
+install -m755 "${lw_project_dir}/target/release/lw" "${lw_staged_target}"
+for lw_ort_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
+  install -m755 \
+    -T "$(readlink -f "${lw_project_dir}/target/release/${lw_ort_library}")" \
+    "${lw_lib_dir}/${lw_ort_library}${lw_stage_suffix}"
+done
+
 while read -r lw_legacy_pid; do
   [[ -n "${lw_legacy_pid}" ]] || continue
   lw_legacy_command="$(tr '\0' ' ' <"/proc/${lw_legacy_pid}/cmdline" 2>/dev/null || true)"
@@ -95,15 +113,16 @@ while read -r lw_native_pid; do
   fi
 done < <(pgrep -u "$(id -u)" -f '(^|/)lw __daemon( |$)' || true)
 
-install -m755 "${lw_project_dir}/target/release/lw" "${lw_target}"
 for lw_ort_library in "${lw_ort_shared}" "${lw_ort_cuda}"; do
-  install -m755 \
-    -T "$(readlink -f "${lw_project_dir}/target/release/${lw_ort_library}")" \
+  mv -fT \
+    "${lw_lib_dir}/${lw_ort_library}${lw_stage_suffix}" \
     "${lw_lib_dir}/${lw_ort_library}"
   ln -sfn \
     "../lib/local-wisper/${lw_ort_library}" \
     "${lw_bin_dir}/${lw_ort_library}"
 done
+mv -fT "${lw_staged_target}" "${lw_target}"
+trap - EXIT
 
 if [[ ! -f "${lw_env_path}" ]]; then
   {

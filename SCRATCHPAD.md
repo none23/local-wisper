@@ -206,7 +206,7 @@ SHA-256 digests for the encoder, decoder/joint graph, and vocabulary. Downloads
 land in `.part` files and are renamed only after verification. A completion
 marker lets later daemon starts avoid hashing the 1.2 GB encoder again.
 
-The optimized `lw` binary is 35 MB and links only the ordinary glibc, libstdc++,
+The optimized `lw` binary is 29 MB and links only the ordinary glibc, libstdc++,
 libgcc, and libm runtime libraries at startup. A release build loaded cuDNN from
 an explicit native-library directory with `LD_LIBRARY_PATH` removed, then
 loaded Parakeet on CUDA in 1.33 seconds. It transcribed the 11.04-second fixture
@@ -216,6 +216,11 @@ explicit approval. It stopped the legacy Python daemon and replaced
 resolves its CUDA provider shared objects beside the executable. The build now
 emits those exact locked-version objects, and the installer stores them under
 `~/.local/lib/local-wisper` with links beside `lw`.
+
+The final review changed installation updates to stage the executable and ONNX
+provider libraries beside their destinations before stopping the resident
+model. Provider libraries are committed first and the executable is moved into
+place last, so a failed copy cannot truncate the working installation.
 
 ## Current system integration
 
