@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: BAML and native build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BAML_VERSION: 0.16.0
+      BAML_WRAPPER_VERSION: 0.2.4
+      BAML_WRAPPER_SHA256: a4666f8e0e72926feaa2641efef07f9e9d2f1432d96ccd4c8e31151ea27e4862
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install system tools
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+
+      - name: Install BAML
+        shell: bash
+        run: |
+          lw_baml_archive="baml-wrapper-no-self-update-${BAML_WRAPPER_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          lw_baml_url="https://github.com/BoundaryML/baml/releases/download/baml-wrapper-${BAML_WRAPPER_VERSION}/${lw_baml_archive}"
+          lw_baml_dir="${RUNNER_TEMP}/baml"
+
+          curl --fail --location --show-error --silent \
+            --output "${RUNNER_TEMP}/${lw_baml_archive}" \
+            "${lw_baml_url}"
+          echo "${BAML_WRAPPER_SHA256}  ${RUNNER_TEMP}/${lw_baml_archive}" | sha256sum --check
+          mkdir -p "${lw_baml_dir}"
+          tar -xzf "${RUNNER_TEMP}/${lw_baml_archive}" -C "${lw_baml_dir}"
+          echo "${lw_baml_dir}/bin" >> "${GITHUB_PATH}"
+
+      - name: Install BAML toolchain
+        run: baml toolchain install "${BAML_VERSION}"
+
+      - name: Report tool versions
+        run: |
+          baml --version
+          rustc --version
+          cargo --version
+          shellcheck --version
+
+      - name: Check BAML formatting
+        run: |
+          baml fmt
+          git diff --exit-code -- baml_src
+
+      - name: Check and test BAML
+        run: |
+          baml check -F display_all_warnings
+          baml test --no-profile
+
+      - name: Generate Rust SDK
+        shell: bash
+        run: |
+          if ! baml generate -q >"${RUNNER_TEMP}/baml-generate.log" 2>&1; then
+            cat "${RUNNER_TEMP}/baml-generate.log"
+            exit 1
+          fi
+
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+
+      - name: Lint Rust
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --locked --all-targets
+
+      - name: Build release
+        run: |
+          cargo build --release --locked
+          test -f target/release/lw
+          test -f target/release/libonnxruntime_providers_shared.so
+          test -f target/release/libonnxruntime_providers_cuda.so
+
+      - name: Check shell scripts
+        run: |
+          shellcheck install.sh integrations/sway/local-wisper.sh
+          bash -n install.sh integrations/sway/local-wisper.sh
