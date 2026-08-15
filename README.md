@@ -1,9 +1,9 @@
 # Local Wisper, BAML experiment
 
 This branch replaces the Python application with a compiled `lw` executable.
-BAML defines the command workflow, cleanup policy, and optional OpenAI cleanup.
-A small Rust host records audio, owns the resident Parakeet model, and selects
-the fastest supported local runtime.
+BAML parses the CLI and executes the command workflow, cleanup policy, and
+optional OpenAI cleanup. A Rust host supplies typed native capabilities while
+holding the resident Parakeet model.
 
 The application uses one fixed setup:
 
@@ -97,10 +97,10 @@ cargo test
 Build the executable with `cargo build --release`. The checked-in generated
 Rust SDK embeds the BAML bytecode, so release builds do not invoke BAML.
 
-The process split is intentionally small. BAML returns an exhaustive action
-plan for each command. Rust executes those actions and holds an exclusive
-per-user lock before loading Parakeet. That lock is what prevents two model
-copies from entering memory at once.
+The process split is intentionally small. Rust starts one BAML application
+function and injects typed callbacks for native operations. BAML owns command
+ordering and state. Rust holds an exclusive per-user lock before loading
+Parakeet; that lock prevents two model copies from entering memory at once.
 
 The checked fixture on the development machine took 0.36 seconds with FP16
 CUDA and 0.80 seconds with INT8 CPU for 11.04 seconds of audio. The CPU daemon

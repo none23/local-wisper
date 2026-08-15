@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use clap::ValueEnum;
 use parakeet_rs::{ExecutionConfig, ParakeetTDT, TimestampMode, Transcriber};
 use reqwest::blocking::Client;
 use sha2::{Digest, Sha256};
@@ -14,7 +13,7 @@ use crate::{paths, runtime};
 const REVISION: &str = "f88260fa0777fe0868dda6df85d1a98f012a4a7a";
 const REPOSITORY: &str = "ysdede/parakeet-tdt-0.6b-v3-onnx";
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DevicePreference {
     #[default]
     Auto,

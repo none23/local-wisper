@@ -1,28 +1,3 @@
-enum Command {
-    Record,
-    Preload,
-    SwayStart,
-    SwayStop,
-    SwayCancel,
-}
-
-enum NativeAction {
-    EnsureModel,
-    StartModel,
-    RecordInteractively,
-    StartRecording,
-    StopRecording,
-    CancelRecording,
-    Transcribe,
-    CleanTranscript,
-    TypeOutput,
-}
-
-class CommandPlan {
-    command: Command,
-    actions: NativeAction[],
-}
-
 class CleanResult {
     text: string?,
     error: string?,
@@ -32,33 +7,6 @@ client TranscriptCleaner = openai.OpenAiClient.new(
     model = "gpt-5.6-luna",
     api_key_env = "OPENAI_API_KEY",
 )
-
-//# traces Command -> ordered NativeAction values for the Rust host
-
-function plan_command(command: Command) -> CommandPlan {
-    let actions: NativeAction[] = match (command) {
-        Command.Record => {
-            [
-                NativeAction.EnsureModel,
-                NativeAction.RecordInteractively,
-                NativeAction.Transcribe,
-                NativeAction.CleanTranscript,
-            ]
-        },
-        Command.Preload => [NativeAction.EnsureModel],
-        Command.SwayStart => [NativeAction.StartRecording, NativeAction.StartModel],
-        Command.SwayStop => {
-            [
-                NativeAction.StopRecording,
-                NativeAction.Transcribe,
-                NativeAction.CleanTranscript,
-                NativeAction.TypeOutput,
-            ]
-        },
-        Command.SwayCancel => [NativeAction.CancelRecording],
-    };
-    CommandPlan { command: command, actions: actions }
-}
 
 // Short utterances stay local. They rarely benefit from a network round trip,
 // and this matches the established six-word threshold.
@@ -110,34 +58,6 @@ function clean_transcript(transcript: string, glossary: string) -> CleanResult {
         },
     };
     CleanResult { text: cleaned.trim(), error: null }
-}
-
-function main() -> string {
-    "local-wisper: BAML workflow loaded"
-}
-
-test "record plan" {
-    assert.equal(
-        plan_command(Command.Record).actions,
-        [
-            NativeAction.EnsureModel,
-            NativeAction.RecordInteractively,
-            NativeAction.Transcribe,
-            NativeAction.CleanTranscript,
-        ],
-    )
-}
-
-test "sway stop plan types the result" {
-    assert.equal(
-        plan_command(Command.SwayStop).actions,
-        [
-            NativeAction.StopRecording,
-            NativeAction.Transcribe,
-            NativeAction.CleanTranscript,
-            NativeAction.TypeOutput,
-        ],
-    )
 }
 
 test "model cleanup threshold" {

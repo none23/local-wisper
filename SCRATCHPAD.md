@@ -12,9 +12,9 @@ experimental rewrite. Keep it current while work is in progress.
 - A small Rust layer may implement Parakeet inference and native operations that
   BAML cannot express. All application behavior should remain in BAML where the
   language permits it.
-- BAML owns the exhaustive command plan, the decision to use remote cleanup,
-  and the OpenAI cleanup prompt. Rust executes native actions and owns local
-  deterministic text transformations that need regular expressions.
+- BAML owns CLI parsing, complete command execution, the decision to use remote
+  cleanup, and the OpenAI cleanup prompt. Rust injects typed native callbacks
+  for capabilities that have not yet moved into BAML.
 - This worktree is experimental. Compatibility with the primary checkout is not
   required beyond the explicitly preserved user-facing workflow.
 
@@ -149,11 +149,19 @@ loaded in 1.36 seconds, and transcribed the fixture in 363 ms. With
 `nvidia-smi` hidden, automatic mode selected INT8 CPU and made no GPU
 allocation.
 
-The CLI now runs BAML's `plan_command` and executes the returned native actions.
-It accepts the current Sway wrapper's full invocation unchanged while rejecting
-different backends, models, devices, sample rates, compute types, and VAD modes.
-Five concurrent `preload` calls were tested against one resident Rust process
-and one CUDA allocation.
+The first implementation made Rust interpret a static action list returned by
+BAML. That was the wrong boundary for this experiment: it made Rust own the
+state machine and turned BAML into workflow metadata. The application now calls
+one BAML `run_app` entrypoint. BAML parses the unchanged Sway invocation, owns
+the command state and ordering, and invokes typed native closures supplied by
+the Rust bootstrap. The generated Rust bridge supports this direction directly.
+Five concurrent `preload` calls were previously tested against one resident
+Rust process and one CUDA allocation.
+
+The remaining goal is to keep moving implementations behind those callbacks
+into BAML. Rust should finish as a small owner of the live `ParakeetTDT` object,
+CUDA/ONNX setup, a per-user OS lock, and any Linux process operations that BAML
+cannot express safely. Line count is not the goal; application ownership is.
 
 The deterministic cleanup is implemented in Rust because BAML has no regular
 expression support suitable for the established boundary-aware rules. BAML
