@@ -26,6 +26,13 @@ class AppOptions {
     post_process_glossary_file: string?,
 }
 
+class TranscriptRecord {
+    raw_text: string,
+    final_text: string,
+    processing: TranscriptProcessing,
+    post_process_model: string?,
+}
+
 function invalid_argument(message: string) -> never {
     throw baml.errors.InvalidArgument { message: message }
 }
@@ -152,17 +159,60 @@ function parse_options(args: string[]) -> AppOptions {
     options
 }
 
-function clean_if_present(transcript: string, options: AppOptions) -> string {
-    if (transcript.trim() == "") {
+function prepare_transcript(raw_text: string, options: AppOptions) -> TranscriptRecord? {
+    if (raw_text.trim() == "") {
         baml.io.eprintln("No speech detected.");
-        ""
+        null
     } else {
-        process_transcript(
-            transcript,
+        let processed = process_transcript(
+            raw_text,
             options.post_process_model,
             options.post_process_timeout,
             options.post_process_glossary_file,
-        )
+        );
+        TranscriptRecord {
+            raw_text: raw_text,
+            final_text: processed.text,
+            processing: processed.processing,
+            post_process_model: options.post_process_model,
+        }
+    }
+}
+
+function store_transcript(
+    transcript: TranscriptRecord,
+    native_store_transcript: (transcript: TranscriptRecord) -> null throws baml.errors.HostCallable,
+) -> null {
+    native_store_transcript(transcript) catch_all (error) {
+        _ => {
+            baml.io.eprintln(`Warning: Could not save transcript history: ${error.to_string()}`);
+            null
+        },
+    }
+}
+
+function delivery_failure_message(mode: DeliveryMode) -> string {
+    match (mode) {
+        DeliveryMode.Copy => "Could not copy transcript to the clipboard.",
+        DeliveryMode.Type => "Could not type transcript into the focused application.",
+    }
+}
+
+function complete_transcription(
+    raw_text: string,
+    options: AppOptions,
+    mode: DeliveryMode,
+    native_store_transcript: (transcript: TranscriptRecord) -> null throws baml.errors.HostCallable,
+) -> null {
+    if let transcript: TranscriptRecord = prepare_transcript(raw_text, options) {
+        baml.io.println(transcript.final_text);
+        if (!deliver_text(transcript.final_text, mode)) {
+            baml.io.eprintln(`Warning: ${delivery_failure_message(mode)}`)
+        }
+        //# Persistence is best effort and must not delay delivery.
+        store_transcript(transcript, native_store_transcript)
+    } else {
+        null
     }
 }
 
@@ -183,6 +233,7 @@ function run_workflow(
         process: NativeRecorder,
         backend: RecorderBackend,
     ) -> null throws baml.errors.HostCallable,
+    native_store_transcript: (transcript: TranscriptRecord) -> null throws baml.errors.HostCallable,
 ) -> null {
     match (options.command) {
         AppCommand.Record => {
@@ -191,16 +242,12 @@ function run_workflow(
             ensure_model_daemon(runtime_dir, options.device, native_spawn_daemon);
             let audio = record_interactively(runtime_dir, native_spawn_recorder, native_recorder_exists, native_stop_recorder);
             defer { cleanup_audio(audio) }
-            let transcript = clean_if_present(
+            complete_transcription(
                 transcribe_with_daemon(runtime_dir, audio.path, options.device, native_spawn_daemon),
                 options,
+                DeliveryMode.Copy,
+                native_store_transcript,
             );
-            if (transcript != "") {
-                baml.io.println(transcript);
-                if (!deliver_text(transcript, DeliveryMode.Copy)) {
-                    baml.io.eprintln("Warning: Could not copy transcript to the clipboard.")
-                }
-            }
             null
         },
         AppCommand.Preload => {
@@ -215,23 +262,17 @@ function run_workflow(
             let runtime_dir = native_runtime_dir();
             let audio = sway_stop_recording(runtime_dir, native_recorder_exists, native_stop_recorder);
             defer { cleanup_audio(audio) }
-            let transcript = clean_if_present(
+            let mode = if (options.type_output) {
+                DeliveryMode.Type
+            } else {
+                DeliveryMode.Copy
+            };
+            complete_transcription(
                 transcribe_with_daemon(runtime_dir, audio.path, options.device, native_spawn_daemon),
                 options,
+                mode,
+                native_store_transcript,
             );
-            if (transcript != "") {
-                baml.io.println(transcript);
-                let mode = if (options.type_output) {
-                    DeliveryMode.Type
-                } else {
-                    DeliveryMode.Copy
-                };
-                if (!deliver_text(transcript, mode)) {
-                    baml.io.eprintln(
-                        "Warning: Could not deliver transcript to the focused application.",
-                    )
-                }
-            }
             null
         },
         AppCommand.SwayCancel => {
@@ -257,6 +298,7 @@ function run_app(
         process: NativeRecorder,
         backend: RecorderBackend,
     ) -> null throws baml.errors.HostCallable,
+    native_store_transcript: (transcript: TranscriptRecord) -> null throws baml.errors.HostCallable,
 ) -> int {
     run_workflow(
         parse_options(args),
@@ -265,6 +307,7 @@ function run_app(
         native_spawn_recorder,
         native_recorder_exists,
         native_stop_recorder,
+        native_store_transcript,
     ) catch_all (error) {
         _ => {
             baml.io.eprintln(error.to_string());
@@ -302,4 +345,30 @@ test "bare arguments select interactive recording" {
 test "post-processing model is user configurable" {
     let options = parse_options(["--post-process-model", "gpt-5.6-luna-next"]);
     assert.equal(options.post_process_model, "gpt-5.6-luna-next")
+}
+
+test "history receives the raw and final transcript" {
+    let saved: string[] = [];
+    store_transcript(TranscriptRecord { raw_text: "raw words", final_text: "Final words.", processing: TranscriptProcessing.Model, post_process_model: "gpt-5.6-luna" }, (
+        transcript,
+    ) -> {
+        saved.push(
+            `${transcript.raw_text}|${transcript.final_text}|${transcript.processing}|${transcript.post_process_model ?? "none"}`,
+        );
+        null
+    });
+    assert.equal(saved, ["raw words|Final words.|Model|gpt-5.6-luna"])
+}
+
+test "local processing records the raw and final transcript" {
+    let transcript = prepare_transcript("version zero point one.", parse_options([]));
+    assert.equal(
+        transcript,
+        TranscriptRecord {
+            raw_text: "version zero point one.",
+            final_text: "version 0.1",
+            processing: TranscriptProcessing.Local,
+            post_process_model: null,
+        },
+    )
 }

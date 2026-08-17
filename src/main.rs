@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 
 mod daemon;
+mod history;
 mod model;
 mod paths;
 mod recording;
@@ -73,6 +74,7 @@ fn main() -> Result<()> {
         },
         move |process| native(observed_recorders.exists(process)),
         move |process, backend| native(stopped_recorders.stop(process, backend)),
+        move |transcript: baml_sdk::TranscriptRecord| native(history::save(transcript)),
     )
     .context("BAML application failed")?;
 

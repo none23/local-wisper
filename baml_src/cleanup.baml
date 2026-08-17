@@ -34,6 +34,19 @@ class ModelCleanAttempt {
     timed_out: bool,
 }
 
+enum TranscriptProcessing {
+    Local,
+    Model,
+    ModelTimeoutFallback,
+    ModelErrorFallback,
+    ModelRejectedFallback,
+}
+
+class ProcessedTranscript {
+    text: string,
+    processing: TranscriptProcessing,
+}
+
 function empty_glossary() -> Glossary {
     Glossary { always: [], likely: [], contextual: [], terms: [], legacy: null }
 }
@@ -626,7 +639,7 @@ function process_transcript(
     model: string?,
     timeout_seconds: float,
     glossary_file: string?,
-) -> string {
+) -> ProcessedTranscript {
     let raw_word_count = word_count(text);
     let glossary = load_glossary(glossary_file) catch_all (error) {
         _ => {
@@ -636,18 +649,14 @@ function process_transcript(
     };
     let prepared = apply_guaranteed_corrections(normalize_spoken_numerics(text), glossary.always);
     let local = normalize_short_statement_style(prepared);
-    if (!should_clean_with_model(raw_word_count, model)) {
-        return local;
-    }
-
-    let model_name = model
-        ?? return local;
+    let model_name = model_for_cleanup(raw_word_count, model)
+        ?? return ProcessedTranscript { text: local, processing: TranscriptProcessing.Local };
     let attempt = clean_with_timeout(prepared, glossary_prompt(glossary), model_name, timeout_seconds);
     if (attempt.timed_out) {
         baml.io.eprintln(
             `Warning: transcript post-processing timed out after ${timeout_seconds}s; using local cleanup.`,
         );
-        return local;
+        return ProcessedTranscript { text: local, processing: TranscriptProcessing.ModelTimeoutFallback };
     }
     let result = attempt.result ?? CleanResult { text: null, error: "missing model result" };
     let cleaned = result.text ?? "";
@@ -655,13 +664,16 @@ function process_transcript(
         baml.io.eprintln(
             `Warning: transcript post-processing failed: ${result.error ?? "empty model output"}; using local cleanup.`,
         );
-        return local;
+        return ProcessedTranscript { text: local, processing: TranscriptProcessing.ModelErrorFallback };
     }
     if (looks_like_unwanted_non_latin_translation(prepared, cleaned)) {
         baml.io.eprintln("Warning: transcript cleanup changed the language; using local cleanup.");
-        return local;
+        return ProcessedTranscript { text: local, processing: TranscriptProcessing.ModelRejectedFallback };
     }
-    normalize_final_transcript(apply_guaranteed_corrections(cleaned, glossary.always))
+    ProcessedTranscript {
+        text: normalize_final_transcript(apply_guaranteed_corrections(cleaned, glossary.always)),
+        processing: TranscriptProcessing.Model,
+    }
 }
 
 test "BAML normalizes spoken numbers" {
