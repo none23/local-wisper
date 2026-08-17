@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      BAML_VERSION: 0.16.0
+      BAML_VERSION: 0.17.0
       BAML_WRAPPER_VERSION: 0.2.4
       BAML_WRAPPER_SHA256: a4666f8e0e72926feaa2641efef07f9e9d2f1432d96ccd4c8e31151ea27e4862
 
@@ -91,5 +91,5 @@ jobs:
 
       - name: Check shell scripts
         run: |
-          shellcheck install.sh integrations/sway/local-wisper.sh
-          bash -n install.sh integrations/sway/local-wisper.sh
+          shellcheck install.sh integrations/sway/local-wisper.sh scripts/baml
+          bash -n install.sh integrations/sway/local-wisper.sh scripts/baml
