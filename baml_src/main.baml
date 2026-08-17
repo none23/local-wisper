@@ -3,19 +3,22 @@ class CleanResult {
     error: string?,
 }
 
-client TranscriptCleaner = openai.ResponsesClient.new(
-    model = "gpt-5.6-luna",
-    api_key = env.OPENAI_API_KEY,
-)
-
 // Short utterances stay local. They rarely benefit from a network round trip,
 // and this matches the established six-word threshold.
-function should_clean_with_model(word_count: int, model_enabled: bool) -> bool {
-    model_enabled && word_count >= 6
+function should_clean_with_model(word_count: int, model: string?) -> bool {
+    model != null && word_count >= 6
 }
 
-function CleanTranscript(transcript: string, glossary: string) -> string {
-    client: TranscriptCleaner
+function transcript_cleaner(model: string) -> openai.ResponsesClient {
+    openai.ResponsesClient.new(
+        model = model,
+        api_key = env.OPENAI_API_KEY,
+        reasoning_effort = "none",
+    )
+}
+
+function CleanTranscript(transcript: string, glossary: string, model: string) -> string {
+    client: transcript_cleaner(model)
     prompt: `
         You are cleaning up a speech-to-text transcript for direct insertion into an editor.
         The transcript most likely refers to full-stack web development, including TypeScript,
@@ -50,8 +53,8 @@ function CleanTranscript(transcript: string, glossary: string) -> string {
 }
 
 // Keep model failures as typed data so the workflow can apply its local fallback.
-function clean_transcript(transcript: string, glossary: string) -> CleanResult {
-    let cleaned = CleanTranscript(transcript, glossary) catch_all (error) {
+function clean_transcript(transcript: string, glossary: string, model: string) -> CleanResult {
+    let cleaned = CleanTranscript(transcript, glossary, model) catch_all (error) {
         _ => {
             return CleanResult { text: null, error: error.to_string() };
         },
@@ -60,7 +63,13 @@ function clean_transcript(transcript: string, glossary: string) -> CleanResult {
 }
 
 test "model cleanup threshold" {
-    assert.equal(should_clean_with_model(5, true), false);
-    assert.equal(should_clean_with_model(6, true), true);
-    assert.equal(should_clean_with_model(12, false), false)
+    assert.equal(should_clean_with_model(5, "gpt-5.6-luna"), false);
+    assert.equal(should_clean_with_model(6, "gpt-5.6-luna"), true);
+    assert.equal(should_clean_with_model(12, null), false)
+}
+
+test "transcript cleaner uses the selected model without reasoning" {
+    let cleaner = transcript_cleaner("gpt-5.6-luna-next");
+    assert.equal(cleaner.model, "gpt-5.6-luna-next");
+    assert.equal(cleaner.reasoning_effort, "none")
 }

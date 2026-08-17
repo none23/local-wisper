@@ -594,8 +594,12 @@ function looks_like_unwanted_non_latin_translation(source: string, processed: st
         && processed_counts[1] > source_counts[1] + allowed_growth
 }
 
-function model_clean_attempt(transcript: string, glossary: string) -> ModelCleanAttempt {
-    ModelCleanAttempt { result: clean_transcript(transcript, glossary), timed_out: false }
+function model_clean_attempt(
+    transcript: string,
+    glossary: string,
+    model: string,
+) -> ModelCleanAttempt {
+    ModelCleanAttempt { result: clean_transcript(transcript, glossary, model), timed_out: false }
 }
 
 function timeout_attempt(timeout_ms: int) -> ModelCleanAttempt {
@@ -608,17 +612,18 @@ function timeout_attempt(timeout_ms: int) -> ModelCleanAttempt {
 function clean_with_timeout(
     transcript: string,
     glossary: string,
+    model_name: string,
     timeout_seconds: float,
 ) -> ModelCleanAttempt {
     let timeout_ms = (timeout_seconds * 1000.0).iceil();
-    let model = spawn { model_clean_attempt(transcript, glossary) };
+    let model = spawn { model_clean_attempt(transcript, glossary, model_name) };
     let timeout = spawn { timeout_attempt(timeout_ms) };
     await baml.future.race([model, timeout])
 }
 
 function process_transcript(
     text: string,
-    model_enabled: bool,
+    model: string?,
     timeout_seconds: float,
     glossary_file: string?,
 ) -> string {
@@ -631,11 +636,13 @@ function process_transcript(
     };
     let prepared = apply_guaranteed_corrections(normalize_spoken_numerics(text), glossary.always);
     let local = normalize_short_statement_style(prepared);
-    if (!should_clean_with_model(raw_word_count, model_enabled)) {
+    if (!should_clean_with_model(raw_word_count, model)) {
         return local;
     }
 
-    let attempt = clean_with_timeout(prepared, glossary_prompt(glossary), timeout_seconds);
+    let model_name = model
+        ?? return local;
+    let attempt = clean_with_timeout(prepared, glossary_prompt(glossary), model_name, timeout_seconds);
     if (attempt.timed_out) {
         baml.io.eprintln(
             `Warning: transcript post-processing timed out after ${timeout_seconds}s; using local cleanup.`,

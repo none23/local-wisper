@@ -69,3 +69,8 @@ transcripts. Enable it in `~/.config/local-wisper/env`:
 export OPENAI_API_KEY='...'
 export LW_POST_PROCESS_MODEL='gpt-5.6-luna'
 ```
+
+The Sway wrapper sources this file and passes `LW_POST_PROCESS_MODEL` directly
+to OpenAI. Leave it empty to disable remote cleanup. Cleanup uses the Responses
+API with reasoning effort fixed at `none`; run `lw --help` for the equivalent
+command-line options.
