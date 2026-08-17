@@ -14,7 +14,7 @@ cloud.
 - `pw-record` or `ffmpeg` for audio capture
 - `wl-copy`, `xclip`, or `xsel` for clipboard output
 - `wtype` for typing into the focused Sway window
-- BAML 0.16, `cargo`, `curl`, and `sha256sum` to build and install
+- The BAML toolchain wrapper, `cargo`, `curl`, and `sha256sum` to build and install
 
 ## Install
 

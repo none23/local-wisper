@@ -3,13 +3,13 @@ repos:
     hooks:
       - id: baml-format
         name: BAML format
-        entry: baml fmt
+        entry: scripts/baml fmt
         language: system
         files: ^baml_src/.*\.baml$
 
       - id: baml-check
         name: BAML check
-        entry: baml check -F display_all_warnings
+        entry: scripts/baml check -F display_all_warnings
         language: system
         pass_filenames: false
         files: ^(baml\.toml|baml_src/.*\.baml)$
@@ -25,4 +25,4 @@ repos:
         name: ShellCheck
         entry: shellcheck
         language: system
-        files: ^(install\.sh|integrations/.*\.sh)$
+        files: ^(install\.sh|integrations/.*\.sh|scripts/baml)$

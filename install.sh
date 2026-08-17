@@ -26,7 +26,7 @@ for lw_command in baml cargo curl readlink sha256sum; do
 done
 
 echo "Generating the BAML Rust SDK..."
-baml generate -q --project "${lw_project_dir}"
+"${lw_project_dir}/scripts/baml" generate -q --project "${lw_project_dir}"
 echo "Building the release binary..."
 cargo build --release --locked --manifest-path "${lw_project_dir}/Cargo.toml"
 
@@ -144,7 +144,7 @@ if [[ ! -f "${lw_glossary_path}" ]]; then
   install -m600 "${lw_project_dir}/glossary.example.txt" "${lw_glossary_path}"
 fi
 
-echo "Caching the BAML 0.16 runtime..."
+echo "Caching the BAML runtime..."
 "${lw_target}" sway-cancel
 
 echo "Installed ${lw_target}"

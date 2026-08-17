@@ -78,7 +78,7 @@ function parse_glossary(raw: string) -> Glossary {
             continue;
         }
         if (line.starts_with("[") && line.ends_with("]")) {
-            current = glossary_section(line.substring(1, line.length() - 1).trim(), line_number);
+            current = glossary_section(line.slice(1, line.length() - 1).trim(), line_number);
             continue;
         }
         let section = current;
@@ -92,8 +92,8 @@ function parse_glossary(raw: string) -> Glossary {
 
         let arrow = line.index_of("->")
             ?? invalid_argument(`glossary entry on line ${line_number} must use 'source -> replacement'`);
-        let source = line.substring(0, arrow).trim();
-        let replacement = line.substring(arrow + 2, line.length()).trim();
+        let source = line.slice(0, arrow).trim();
+        let replacement = line.slice(arrow + 2, line.length()).trim();
         if (source == "" || replacement == "") {
             invalid_argument(`glossary entry on line ${line_number} has an empty source or replacement`)
         }
@@ -117,6 +117,9 @@ function parse_glossary(raw: string) -> Glossary {
                 null
             },
             GlossarySection.Terms => null,
+            null => {
+                invalid_argument(`glossary entry on line ${line_number} must follow a section header`)
+            },
         };
     }
     glossary
@@ -172,19 +175,23 @@ function is_boundary_character(character: string) -> bool {
     character.is_alphanumeric() || character == "_"
 }
 
+function character_at(text: string, index: int) -> string {
+    text.at(index) ?? invalid_argument(`character index ${index} is out of bounds`)
+}
+
 function word_spans(text: string) -> WordSpan[] {
     let spans: WordSpan[] = [];
     let index = 0;
     while (index < text.length()) {
-        if (!is_word_character(text.char_at(index))) {
+        if (!is_word_character(character_at(text, index))) {
             index += 1;
             continue;
         }
         let start = index;
-        while (index < text.length() && is_word_character(text.char_at(index))) {
+        while (index < text.length() && is_word_character(character_at(text, index))) {
             index += 1;
         }
-        spans.push(WordSpan { text: text.substring(start, index), start: start, end: index });
+        spans.push(WordSpan { text: text.slice(start, index), start: start, end: index });
     }
     spans
 }
@@ -288,7 +295,7 @@ function parse_spoken_number(words: string[]) -> int? {
 }
 
 function spans_are_connected(text: string, left: WordSpan, right: WordSpan) -> bool {
-    let separator = text.substring(left.end, right.start);
+    let separator = text.slice(left.end, right.start);
     separator.chars().every((character) -> {
         character.is_whitespace() || character == "-"
     })
@@ -358,7 +365,7 @@ function normalize_spoken_numerics(text: string) -> string {
     while (word < spans.length()) {
         let matched = numeric_marker_match(text, spans, word) ?? decimal_match(text, spans, word);
         if let replacement: NumericMatch = matched {
-            output += text.substring(cursor, spans[word].start);
+            output += text.slice(cursor, spans[word].start);
             output += replacement.replacement;
             cursor = spans[replacement.end_word - 1].end;
             word = replacement.end_word;
@@ -366,16 +373,16 @@ function normalize_spoken_numerics(text: string) -> string {
             word += 1;
         }
     }
-    output + text.substring(cursor, text.length())
+    output + text.slice(cursor, text.length())
 }
 
 function correction_matches(text: string, index: int, source: string) -> bool {
     let end = index + source.length();
-    if (end > text.length() || text.substring(index, end).to_lower_case() != source.to_lower_case()) {
+    if (end > text.length() || text.slice(index, end).to_lower_case() != source.to_lower_case()) {
         return false;
     }
-    let before_ok = index == 0 || !is_boundary_character(text.char_at(index - 1));
-    let after_ok = end == text.length() || !is_boundary_character(text.char_at(end));
+    let before_ok = index == 0 || !is_boundary_character(character_at(text, index - 1));
+    let after_ok = end == text.length() || !is_boundary_character(character_at(text, end));
     before_ok && after_ok
 }
 
@@ -395,7 +402,7 @@ function apply_guaranteed_corrections(text: string, rules: GlossaryRule[]) -> st
             output += matched.replacement;
             index += matched.source.length();
         } else {
-            output += text.char_at(index);
+            output += character_at(text, index);
             index += 1;
         }
     }
@@ -406,12 +413,12 @@ function sentence_end_count(text: string) -> int {
     let count = 0;
     let index = 0;
     while (index < text.length()) {
-        let character = text.char_at(index);
+        let character = character_at(text, index);
         if (character == "!" || character == "?") {
             count += 1;
         } else if (character == ".") {
-            let previous_digit = index > 0 && text.char_at(index - 1).is_ascii_numeric();
-            let next_digit = index + 1 < text.length() && text.char_at(index + 1).is_ascii_numeric();
+            let previous_digit = index > 0 && character_at(text, index - 1).is_ascii_numeric();
+            let next_digit = index + 1 < text.length() && character_at(text, index + 1).is_ascii_numeric();
             if (!(previous_digit && next_digit)) {
                 count += 1;
             }
@@ -423,7 +430,7 @@ function sentence_end_count(text: string) -> int {
 
 function leading_whitespace_length(text: string) -> int {
     let index = 0;
-    while (index < text.length() && text.char_at(index).is_whitespace()) {
+    while (index < text.length() && character_at(text, index).is_whitespace()) {
         index += 1;
     }
     index
@@ -431,7 +438,7 @@ function leading_whitespace_length(text: string) -> int {
 
 function trailing_whitespace_start(text: string) -> int {
     let index = text.length();
-    while (index > 0 && text.char_at(index - 1).is_whitespace()) {
+    while (index > 0 && character_at(text, index - 1).is_whitespace()) {
         index -= 1;
     }
     index
@@ -439,17 +446,17 @@ function trailing_whitespace_start(text: string) -> int {
 
 function initial_word_end(text: string, start: int) -> int {
     let index = start;
-    while (index < text.length() && text.char_at(index).is_ascii_alphabetic()) {
+    while (index < text.length() && character_at(text, index).is_ascii_alphabetic()) {
         index += 1;
     }
     index
 }
 
 function starts_with_personal_i(text: string, start: int, end: int) -> bool {
-    if (text.substring(start, end).to_lower_case() != "i") {
+    if (text.slice(start, end).to_lower_case() != "i") {
         return false;
     }
-    let rest = text.substring(end, text.length()).to_lower_case();
+    let rest = text.slice(end, text.length()).to_lower_case();
     if (rest == "") {
         return true;
     }
@@ -499,7 +506,7 @@ function starts_with_personal_i(text: string, start: int, end: int) -> bool {
     ];
     verbs.some((verb) -> {
         next == verb
-            || (next.starts_with(verb) && !is_boundary_character(next.char_at(verb.length())))
+            || (next.starts_with(verb) && !is_boundary_character(character_at(next, verb.length())))
     })
 }
 
@@ -509,23 +516,23 @@ function capitalize_initial_word(text: string, long_statement: bool) -> string {
     if (end == start) {
         return text;
     }
-    let word = text.substring(start, end);
+    let word = text.slice(start, end);
     let replacement = if (starts_with_personal_i(text, start, end)) {
         "I"
     } else if (!long_statement && word == "A") {
         "a"
     } else if (
         !long_statement
-            && word.char_at(0).is_ascii_uppercase()
-            && word.substring(1, word.length()).is_ascii_lowercase()
+            && character_at(word, 0).is_ascii_uppercase()
+            && word.slice(1, word.length()).is_ascii_lowercase()
     ) {
         word.to_lower_case()
     } else if (long_statement && word.is_ascii_lowercase()) {
-        word.char_at(0).to_upper_case() + word.substring(1, word.length())
+        character_at(word, 0).to_upper_case() + word.slice(1, word.length())
     } else {
         word
     };
-    text.substring(0, start) + replacement + text.substring(end, text.length())
+    text.slice(0, start) + replacement + text.slice(end, text.length())
 }
 
 function normalize_short_statement_style(text: string) -> string {
@@ -539,8 +546,8 @@ function normalize_short_statement_style(text: string) -> string {
         return text;
     }
     let suffix_start = trailing_whitespace_start(text);
-    let body = text.substring(0, suffix_start);
-    let suffix = text.substring(suffix_start, text.length());
+    let body = text.slice(0, suffix_start);
+    let suffix = text.slice(suffix_start, text.length());
     if (word_count(text) > 10) {
         let styled = capitalize_initial_word(body, true);
         let punctuation = if (styled == "" || styled.ends_with(".") || styled.ends_with("!") || styled.ends_with("?")) {
@@ -551,7 +558,7 @@ function normalize_short_statement_style(text: string) -> string {
         return styled + punctuation + suffix;
     }
     let without_period = if (body.ends_with(".")) {
-        body.substring(0, body.length() - 1).trim_end()
+        body.slice(0, body.length() - 1).trim_end()
     } else {
         body
     };

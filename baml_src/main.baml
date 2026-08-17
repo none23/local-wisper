@@ -3,9 +3,9 @@ class CleanResult {
     error: string?,
 }
 
-client TranscriptCleaner = openai.OpenAiClient.new(
+client TranscriptCleaner = openai.ResponsesClient.new(
     model = "gpt-5.6-luna",
-    api_key_env = "OPENAI_API_KEY",
+    api_key = env.OPENAI_API_KEY,
 )
 
 // Short utterances stay local. They rarely benefit from a network round trip,
