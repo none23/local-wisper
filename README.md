@@ -74,3 +74,15 @@ The Sway wrapper sources this file and passes `LW_POST_PROCESS_MODEL` directly
 to OpenAI. Leave it empty to disable remote cleanup. Cleanup uses the Responses
 API with reasoning effort fixed at `none`; run `lw --help` for the equivalent
 command-line options.
+
+## Transcript history
+
+Local Wisper saves each successful transcription in an on-device SQLite database.
+Each row contains the speech-to-text output, the final processed text prepared
+for delivery, the configured post-processing model (if any), and the processing
+path that produced the final text. Audio is not retained.
+
+The database is stored at `$XDG_DATA_HOME/local-wisper/transcripts.sqlite3`, or
+`~/.local/share/local-wisper/transcripts.sqlite3` when `XDG_DATA_HOME` is unset.
+Local Wisper restricts the directory to the current user, but the database
+contents are not encrypted.

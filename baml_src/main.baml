@@ -5,8 +5,12 @@ class CleanResult {
 
 // Short utterances stay local. They rarely benefit from a network round trip,
 // and this matches the established six-word threshold.
-function should_clean_with_model(word_count: int, model: string?) -> bool {
-    model != null && word_count >= 6
+function model_for_cleanup(word_count: int, model: string?) -> string? {
+    if (word_count >= 6) {
+        model
+    } else {
+        null
+    }
 }
 
 function transcript_cleaner(model: string) -> openai.ResponsesClient {
@@ -63,9 +67,9 @@ function clean_transcript(transcript: string, glossary: string, model: string) -
 }
 
 test "model cleanup threshold" {
-    assert.equal(should_clean_with_model(5, "gpt-5.6-luna"), false);
-    assert.equal(should_clean_with_model(6, "gpt-5.6-luna"), true);
-    assert.equal(should_clean_with_model(12, null), false)
+    assert.equal(model_for_cleanup(5, "gpt-5.6-luna"), null);
+    assert.equal(model_for_cleanup(6, "gpt-5.6-luna"), "gpt-5.6-luna");
+    assert.equal(model_for_cleanup(12, null), null)
 }
 
 test "transcript cleaner uses the selected model without reasoning" {
