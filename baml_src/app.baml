@@ -21,7 +21,7 @@ class AppOptions {
     command: AppCommand,
     device: DevicePreference,
     type_output: bool,
-    post_process_model: bool,
+    post_process_model: string?,
     post_process_timeout: float,
     post_process_glossary_file: string?,
 }
@@ -59,7 +59,7 @@ function parse_options(args: string[]) -> AppOptions {
         command: AppCommand.Record,
         device: DevicePreference.Auto,
         type_output: false,
-        post_process_model: false,
+        post_process_model: null,
         post_process_timeout: 20.0,
         post_process_glossary_file: null,
     };
@@ -107,10 +107,10 @@ function parse_options(args: string[]) -> AppOptions {
             },
             "--post-process-model" => {
                 let value = required_value(args, index + 1, arg);
-                if (value != "gpt-5.6-luna") {
-                    invalid_argument("only --post-process-model gpt-5.6-luna is supported")
+                if (value.trim() == "") {
+                    invalid_argument("--post-process-model must not be empty")
                 }
-                options.post_process_model = true;
+                options.post_process_model = value.trim();
                 index += 2
             },
             "--post-process-timeout" => {
@@ -126,7 +126,12 @@ function parse_options(args: string[]) -> AppOptions {
                 index += 2
             },
             "--help" | "-h" => {
-                baml.io.println("Usage: lw [record|preload|sway-start|sway-stop|sway-cancel]");
+                baml.io.println(
+                    "Usage: lw [record|preload|sway-start|sway-stop|sway-cancel] [options]",
+                );
+                baml.io.println("  --post-process-model MODEL");
+                baml.io.println("  --post-process-timeout SECONDS");
+                baml.io.println("  --post-process-glossary-file PATH");
                 baml.sys.exit(0)
             },
             _ => {
@@ -292,4 +297,9 @@ test "BAML parses the unchanged Sway invocation" {
 
 test "bare arguments select interactive recording" {
     assert.equal(parse_options([]).command, AppCommand.Record)
+}
+
+test "post-processing model is user configurable" {
+    let options = parse_options(["--post-process-model", "gpt-5.6-luna-next"]);
+    assert.equal(options.post_process_model, "gpt-5.6-luna-next")
 }

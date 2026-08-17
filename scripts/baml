@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BAML_VERSION=0.17.0 exec baml "$@"

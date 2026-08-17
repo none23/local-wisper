@@ -14,7 +14,7 @@ cloud.
 - `pw-record` or `ffmpeg` for audio capture
 - `wl-copy`, `xclip`, or `xsel` for clipboard output
 - `wtype` for typing into the focused Sway window
-- BAML 0.16, `cargo`, `curl`, and `sha256sum` to build and install
+- The BAML toolchain wrapper, `cargo`, `curl`, and `sha256sum` to build and install
 
 ## Install
 
@@ -69,3 +69,8 @@ transcripts. Enable it in `~/.config/local-wisper/env`:
 export OPENAI_API_KEY='...'
 export LW_POST_PROCESS_MODEL='gpt-5.6-luna'
 ```
+
+The Sway wrapper sources this file and passes `LW_POST_PROCESS_MODEL` directly
+to OpenAI. Leave it empty to disable remote cleanup. Cleanup uses the Responses
+API with reasoning effort fixed at `none`; run `lw --help` for the equivalent
+command-line options.
