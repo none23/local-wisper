@@ -44,6 +44,11 @@ function type_text(transcript: string) -> bool {
         if (!run_delivery_command("wtype", ["-"], chunk)) {
             return false;
         }
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(5)) catch_all (error) {
+            _ => {
+                return false;
+            },
+        }
     }
     true
 }
