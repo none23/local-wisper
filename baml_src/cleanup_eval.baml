@@ -28,6 +28,14 @@ class CleanupEvalReport {
     results: CleanupEvalResult[],
 }
 
+class CodexCleanupEvalCase {
+    id: string,
+    category: string,
+    transcript: string,
+    expected: string,
+    prompt: string,
+}
+
 // These cases are adapted from local transcript history. Project-specific names and
 // details have been removed. Run with:
 // baml run -e 'run_cleanup_eval(CleanupEvalPrompt.Historical, "gpt-5.6-luna", "none")'
@@ -480,6 +488,21 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
     ]
 }
 
+// Render the production prompt without invoking its API client. The Codex eval runner sends
+// these prompts through ChatGPT subscription authentication instead.
+function render_codex_cleanup_eval_cases() -> CodexCleanupEvalCase[] {
+    let glossary = cleanup_eval_glossary();
+    cleanup_eval_cases().map((item) -> {
+        CodexCleanupEvalCase {
+            id: item.id,
+            category: item.category,
+            transcript: item.transcript,
+            expected: item.expected,
+            prompt: CleanTranscript$render_prompt(item.transcript, glossary, "gpt-5.6-luna").text(),
+        }
+    })
+}
+
 function run_cleanup_eval(
     prompt: CleanupEvalPrompt,
     model: string,
@@ -530,4 +553,10 @@ test "transcript cleanup eval uses the selected model and reasoning effort" {
     let cleaner = cleanup_eval_client("gpt-5.6-luna", "low");
     assert.equal(cleaner.model, "gpt-5.6-luna");
     assert.equal(cleaner.reasoning_effort, "low")
+}
+
+test "Codex eval renders every production prompt without a model call" {
+    let cases = render_codex_cleanup_eval_cases();
+    assert.equal(cases.length(), 47);
+    assert.contains(cases[0].prompt, "<transcript>\nI agree.\n</transcript>")
 }
