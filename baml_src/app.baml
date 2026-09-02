@@ -360,13 +360,13 @@ test "history receives the raw and final transcript" {
     assert.equal(saved, ["raw words|Final words.|Model|gpt-5.6-luna"])
 }
 
-test "local processing records the raw and final transcript" {
+test "local processing preserves the transcript" {
     let transcript = prepare_transcript("version zero point one.", parse_options([]));
     assert.equal(
         transcript,
         TranscriptRecord {
             raw_text: "version zero point one.",
-            final_text: "version 0.1",
+            final_text: "version zero point one.",
             processing: TranscriptProcessing.Local,
             post_process_model: null,
         },

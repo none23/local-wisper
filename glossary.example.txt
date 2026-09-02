@@ -1,4 +1,4 @@
-# Guaranteed local corrections. These also apply to short transcripts.
+# Corrections the cleanup model must always apply.
 [always]
 dot env -> .env
 engine x -> nginx
