@@ -1,0 +1,532 @@
+{
+  "recorded_at": "2026-09-02T22:15:43+04:00",
+  "commit": "cdc53076196906d8f2ce28ed4582b44739df9389",
+  "runner": "codex exec",
+  "codex_version": "codex-cli 0.152.1",
+  "authentication": "ChatGPT subscription",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "low",
+  "passed": 46,
+  "total": 47,
+  "results": [
+    {
+      "id": "complete-i-agree",
+      "category": "preserve_complete",
+      "transcript": "I agree.",
+      "expected": "I agree.",
+      "accepted": [
+        "I agree."
+      ],
+      "actual": "I agree.",
+      "passed": true
+    },
+    {
+      "id": "complete-please-continue",
+      "category": "preserve_complete",
+      "transcript": "Please continue.",
+      "expected": "Please continue.",
+      "accepted": [
+        "Please continue."
+      ],
+      "actual": "Please continue.",
+      "passed": true
+    },
+    {
+      "id": "complete-minimal-fix",
+      "category": "preserve_complete",
+      "transcript": "Let's go with the minimal fix.",
+      "expected": "Let's go with the minimal fix.",
+      "accepted": [
+        "Let's go with the minimal fix."
+      ],
+      "actual": "Let's go with the minimal fix.",
+      "passed": true
+    },
+    {
+      "id": "complete-commit",
+      "category": "preserve_complete",
+      "transcript": "This change should be committed.",
+      "expected": "This change should be committed.",
+      "accepted": [
+        "This change should be committed."
+      ],
+      "actual": "This change should be committed.",
+      "passed": true
+    },
+    {
+      "id": "complete-question",
+      "category": "preserve_complete",
+      "transcript": "How can we solve it?",
+      "expected": "How can we solve it?",
+      "accepted": [
+        "How can we solve it?"
+      ],
+      "actual": "How can we solve it?",
+      "passed": true
+    },
+    {
+      "id": "complete-resolved",
+      "category": "preserve_complete",
+      "transcript": "The problem is resolved.",
+      "expected": "The problem is resolved.",
+      "accepted": [
+        "The problem is resolved."
+      ],
+      "actual": "The problem is resolved.",
+      "passed": true
+    },
+    {
+      "id": "complete-contraction",
+      "category": "preserve_complete",
+      "transcript": "I don't use those providers myself, so I wouldn't be comfortable changing them.",
+      "expected": "I don't use those providers myself, so I wouldn't be comfortable changing them.",
+      "accepted": [
+        "I don't use those providers myself, so I wouldn't be comfortable changing them."
+      ],
+      "actual": "I don't use those providers myself, so I wouldn't be comfortable changing them.",
+      "passed": true
+    },
+    {
+      "id": "complete-local-only",
+      "category": "preserve_complete",
+      "transcript": "All your interactions should stay local. Don't push or interact with the remote repository in any way.",
+      "expected": "All your interactions should stay local. Don't push or interact with the remote repository in any way.",
+      "accepted": [
+        "All your interactions should stay local. Don't push or interact with the remote repository in any way."
+      ],
+      "actual": "All your interactions should stay local. Don't push or interact with the remote repository in any way.",
+      "passed": true
+    },
+    {
+      "id": "complete-emphasis",
+      "category": "preserve_complete",
+      "transcript": "This is extremely important.",
+      "expected": "This is extremely important.",
+      "accepted": [
+        "This is extremely important."
+      ],
+      "actual": "This is extremely important.",
+      "passed": true
+    },
+    {
+      "id": "complete-user-data",
+      "category": "preserve_complete",
+      "transcript": "Would you be able to test it with a copy of the user data so that you don't alter the original?",
+      "expected": "Would you be able to test it with a copy of the user data so that you don't alter the original?",
+      "accepted": [
+        "Would you be able to test it with a copy of the user data so that you don't alter the original?"
+      ],
+      "actual": "Would you be able to test it with a copy of the user data so that you don't alter the original?",
+      "passed": true
+    },
+    {
+      "id": "fragment-prepositional",
+      "category": "preserve_fragment",
+      "transcript": "In the generated artifact.",
+      "expected": "in the generated artifact",
+      "accepted": [
+        "in the generated artifact"
+      ],
+      "actual": "in the generated artifact",
+      "passed": true
+    },
+    {
+      "id": "fragment-while",
+      "category": "preserve_fragment",
+      "transcript": "While the others are still loading.",
+      "expected": "while the others are still loading",
+      "accepted": [
+        "while the others are still loading"
+      ],
+      "actual": "while the others are still loading",
+      "passed": true
+    },
+    {
+      "id": "fragment-device",
+      "category": "preserve_fragment",
+      "transcript": "On the test device.",
+      "expected": "on the test device",
+      "accepted": [
+        "on the test device"
+      ],
+      "actual": "on the test device",
+      "passed": true
+    },
+    {
+      "id": "fragment-without",
+      "category": "preserve_fragment",
+      "transcript": "Without introducing other issues.",
+      "expected": "without introducing other issues",
+      "accepted": [
+        "without introducing other issues"
+      ],
+      "actual": "without introducing other issues",
+      "passed": true
+    },
+    {
+      "id": "fragment-because",
+      "category": "preserve_fragment",
+      "transcript": "Because it will be simpler this way.",
+      "expected": "because it will be simpler this way",
+      "accepted": [
+        "because it will be simpler this way"
+      ],
+      "actual": "because it will be simpler this way",
+      "passed": true
+    },
+    {
+      "id": "fragment-relative",
+      "category": "preserve_fragment",
+      "transcript": "That you may need to follow.",
+      "expected": "that you may need to follow",
+      "accepted": [
+        "that you may need to follow"
+      ],
+      "actual": "that you may need to follow",
+      "passed": true
+    },
+    {
+      "id": "fragment-during",
+      "category": "preserve_fragment",
+      "transcript": "During initial onboarding.",
+      "expected": "during initial onboarding",
+      "accepted": [
+        "during initial onboarding"
+      ],
+      "actual": "during initial onboarding",
+      "passed": true
+    },
+    {
+      "id": "fragment-one-more",
+      "category": "preserve_fragment",
+      "transcript": "And one more.",
+      "expected": "and one more",
+      "accepted": [
+        "and one more"
+      ],
+      "actual": "and one more",
+      "passed": true
+    },
+    {
+      "id": "fragment-on-implementation",
+      "category": "preserve_fragment",
+      "transcript": "On the implementation.",
+      "expected": "on the implementation",
+      "accepted": [
+        "on the implementation"
+      ],
+      "actual": "on the implementation",
+      "passed": true
+    },
+    {
+      "id": "fragment-unfinished",
+      "category": "preserve_fragment",
+      "transcript": "My observation is that mobile changes are typically merged by",
+      "expected": "my observation is that mobile changes are typically merged by",
+      "accepted": [
+        "my observation is that mobile changes are typically merged by"
+      ],
+      "actual": "my observation is that mobile changes are typically merged by",
+      "passed": true
+    },
+    {
+      "id": "term-typescript",
+      "category": "correct_recognition",
+      "transcript": "The package is written in type script.",
+      "expected": "The package is written in TypeScript.",
+      "accepted": [
+        "The package is written in TypeScript."
+      ],
+      "actual": "The package is written in TypeScript.",
+      "passed": true
+    },
+    {
+      "id": "term-nextjs",
+      "category": "correct_recognition",
+      "transcript": "The app is built with next jazz.",
+      "expected": "The app is built with Next.js.",
+      "accepted": [
+        "The app is built with Next.js."
+      ],
+      "actual": "The app is built with Next.js.",
+      "passed": true
+    },
+    {
+      "id": "term-nginx",
+      "category": "correct_recognition",
+      "transcript": "Restart engine x.",
+      "expected": "Restart nginx.",
+      "accepted": [
+        "Restart nginx."
+      ],
+      "actual": "Restart nginx.",
+      "passed": true
+    },
+    {
+      "id": "term-package-json",
+      "category": "correct_recognition",
+      "transcript": "Update package Jason.",
+      "expected": "Update package.json.",
+      "accepted": [
+        "Update package.json."
+      ],
+      "actual": "Update package.json.",
+      "passed": true
+    },
+    {
+      "id": "term-dot-env",
+      "category": "correct_recognition",
+      "transcript": "The dot env file is missing.",
+      "expected": "The .env file is missing.",
+      "accepted": [
+        "The .env file is missing."
+      ],
+      "actual": "The .env file is missing.",
+      "passed": true
+    },
+    {
+      "id": "term-sdk",
+      "category": "correct_recognition",
+      "transcript": "Install the s de k.",
+      "expected": "Install the SDK.",
+      "accepted": [
+        "Install the SDK."
+      ],
+      "actual": "Install the SDK.",
+      "passed": true
+    },
+    {
+      "id": "term-cache",
+      "category": "correct_recognition",
+      "transcript": "The cash should be invalidated first.",
+      "expected": "The cache should be invalidated first.",
+      "accepted": [
+        "The cache should be invalidated first."
+      ],
+      "actual": "The cache should be invalidated first.",
+      "passed": true
+    },
+    {
+      "id": "term-pull-request",
+      "category": "correct_recognition",
+      "transcript": "Open a POR against the backend repository.",
+      "expected": "Open a PR against the backend repository.",
+      "accepted": [
+        "Open a PR against the backend repository."
+      ],
+      "actual": "Open a PR against the backend repository.",
+      "passed": true
+    },
+    {
+      "id": "term-tree-sitter",
+      "category": "correct_recognition",
+      "transcript": "Something seems to break Tree Siller.",
+      "expected": "Something seems to break Tree-sitter.",
+      "accepted": [
+        "Something seems to break Tree-sitter."
+      ],
+      "actual": "Something seems to break Tree-sitter.",
+      "passed": true
+    },
+    {
+      "id": "term-rsync",
+      "category": "correct_recognition",
+      "transcript": "Why does a repeated run of the same R Syn command take so long?",
+      "expected": "Why does a repeated run of the same rsync command take so long?",
+      "accepted": [
+        "Why does a repeated run of the same rsync command take so long?"
+      ],
+      "actual": "Why does a repeated run of the same rsync command take so long?",
+      "passed": true
+    },
+    {
+      "id": "term-neovim",
+      "category": "correct_recognition",
+      "transcript": "When I switch buffers in Neo Bim, the wrong tab stays highlighted.",
+      "expected": "When I switch buffers in Neovim, the wrong tab stays highlighted.",
+      "accepted": [
+        "When I switch buffers in Neovim, the wrong tab stays highlighted."
+      ],
+      "actual": "When I switch buffers in Neovim, the wrong tab stays highlighted.",
+      "passed": true
+    },
+    {
+      "id": "term-code-rabbit",
+      "category": "correct_recognition",
+      "transcript": "Request a review from Code Rabbit.",
+      "expected": "Request a review from CodeRabbit.",
+      "accepted": [
+        "Request a review from CodeRabbit."
+      ],
+      "actual": "Request a review from CodeRabbit.",
+      "passed": true
+    },
+    {
+      "id": "recognition-chief-executive",
+      "category": "correct_recognition",
+      "transcript": "That is a response to a city all of a startup.",
+      "expected": "That is a response to a CEO of a startup.",
+      "accepted": [
+        "That is a response to a CEO of a startup."
+      ],
+      "actual": "That is a response to a CEO of a startup.",
+      "passed": true
+    },
+    {
+      "id": "recognition-backfilled",
+      "category": "correct_recognition",
+      "transcript": "These are the records being back built.",
+      "expected": "These are the records being backfilled.",
+      "accepted": [
+        "These are the records being backfilled."
+      ],
+      "actual": "These are the records being backfilled.",
+      "passed": true
+    },
+    {
+      "id": "ambiguous-number-pair",
+      "category": "correct_unambiguous_number",
+      "transcript": "Let's take zero one, zero four.",
+      "expected": "Let's take 01, 04.",
+      "accepted": [
+        "Let's take 01, 04."
+      ],
+      "actual": "Let's take zero one, zero four.",
+      "passed": false
+    },
+    {
+      "id": "ambiguous-issue-number",
+      "category": "correct_unambiguous_number",
+      "transcript": "Suggest a comment for fourteen sixty six.",
+      "expected": "Suggest a comment for 1466.",
+      "accepted": [
+        "Suggest a comment for 1466."
+      ],
+      "actual": "Suggest a comment for 1466.",
+      "passed": true
+    },
+    {
+      "id": "ambiguous-product-name",
+      "category": "correct_recognition",
+      "transcript": "Request a review from Cold Rabbit.",
+      "expected": "Request a review from CodeRabbit.",
+      "accepted": [
+        "Request a review from CodeRabbit."
+      ],
+      "actual": "Request a review from CodeRabbit.",
+      "passed": true
+    },
+    {
+      "id": "ambiguous-sway",
+      "category": "preserve_ambiguous",
+      "transcript": "Skip Sway configuration altogether.",
+      "expected": "Skip Sway configuration altogether.",
+      "accepted": [
+        "Skip Sway configuration altogether."
+      ],
+      "actual": "Skip Sway configuration altogether.",
+      "passed": true
+    },
+    {
+      "id": "ambiguous-unintelligible",
+      "category": "correct_recognition",
+      "transcript": "We've noticed the fallen Asia in auto naming.",
+      "expected": "We've noticed the following issue in auto naming.",
+      "accepted": [
+        "We've noticed the following issue in auto naming.",
+        "We've noticed the following issue in auto-naming."
+      ],
+      "actual": "We've noticed the following issue in auto naming.",
+      "passed": true
+    },
+    {
+      "id": "ambiguous-before-change",
+      "category": "preserve_ambiguous",
+      "transcript": "Use this for your before change.",
+      "expected": "Use this for your before change.",
+      "accepted": [
+        "Use this for your before change."
+      ],
+      "actual": "Use this for your before change.",
+      "passed": true
+    },
+    {
+      "id": "number-version",
+      "category": "correct_unambiguous_number",
+      "transcript": "Was version five point three released before version five point three flash?",
+      "expected": "Was version 5.3 released before version 5.3 flash?",
+      "accepted": [
+        "Was version 5.3 released before version 5.3 flash?",
+        "Was version 5.3 released before version 5.3 Flash?"
+      ],
+      "actual": "Was version 5.3 released before version 5.3 flash?",
+      "passed": true
+    },
+    {
+      "id": "number-measurement",
+      "category": "correct_unambiguous_number",
+      "transcript": "I think one point five pixels is still too thin.",
+      "expected": "I think 1.5 pixels is still too thin.",
+      "accepted": [
+        "I think 1.5 pixels is still too thin."
+      ],
+      "actual": "I think 1.5 pixels is still too thin.",
+      "passed": true
+    },
+    {
+      "id": "preserve-subject",
+      "category": "avoid_rephrasing",
+      "transcript": "We have to adjust this report to not include theoretical issues that might arise.",
+      "expected": "We have to adjust this report to not include theoretical issues that might arise.",
+      "accepted": [
+        "We have to adjust this report to not include theoretical issues that might arise."
+      ],
+      "actual": "We have to adjust this report to not include theoretical issues that might arise.",
+      "passed": true
+    },
+    {
+      "id": "preserve-modality",
+      "category": "avoid_rephrasing",
+      "transcript": "The links would navigate inside the embedded frame.",
+      "expected": "The links would navigate inside the embedded frame.",
+      "accepted": [
+        "The links would navigate inside the embedded frame."
+      ],
+      "actual": "The links would navigate inside the embedded frame.",
+      "passed": true
+    },
+    {
+      "id": "preserve-word-order",
+      "category": "avoid_rephrasing",
+      "transcript": "Can you cite me the sources?",
+      "expected": "Can you cite me the sources?",
+      "accepted": [
+        "Can you cite me the sources?"
+      ],
+      "actual": "Can you cite me the sources?",
+      "passed": true
+    },
+    {
+      "id": "preserve-dialect",
+      "category": "avoid_rephrasing",
+      "transcript": "Would this cleanly demonstrate the new behaviour?",
+      "expected": "Would this cleanly demonstrate the new behaviour?",
+      "accepted": [
+        "Would this cleanly demonstrate the new behaviour?"
+      ],
+      "actual": "Would this cleanly demonstrate the new behaviour?",
+      "passed": true
+    },
+    {
+      "id": "remove-exact-repetition",
+      "category": "correct_repetition",
+      "transcript": "Do you have do you have any other potential explanations?",
+      "expected": "Do you have any other potential explanations?",
+      "accepted": [
+        "Do you have any other potential explanations?"
+      ],
+      "actual": "Do you have any other potential explanations?",
+      "passed": true
+    }
+  ]
+}
