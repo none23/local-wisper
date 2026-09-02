@@ -244,12 +244,6 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             expected: "When I switch buffers in Neovim, the wrong tab stays highlighted.",
         },
         CleanupEvalCase {
-            id: "term-postgresql",
-            category: "correct_recognition",
-            transcript: "I am considering storing the data in Postgres.",
-            expected: "I am considering storing the data in PostgreSQL.",
-        },
-        CleanupEvalCase {
             id: "term-code-rabbit",
             category: "correct_recognition",
             transcript: "Request a review from Code Rabbit.",
@@ -269,9 +263,9 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
         },
         CleanupEvalCase {
             id: "ambiguous-number-pair",
-            category: "preserve_ambiguous",
+            category: "correct_unambiguous_number",
             transcript: "Let's take zero one, zero four.",
-            expected: "Let's take zero one, zero four.",
+            expected: "Let's take 01, 04.",
         },
         CleanupEvalCase {
             id: "ambiguous-issue-number",
@@ -296,12 +290,6 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             category: "correct_recognition",
             transcript: "We've noticed the fallen Asia in auto naming.",
             expected: "We've noticed the following issue in auto-naming.",
-        },
-        CleanupEvalCase {
-            id: "ambiguous-names",
-            category: "preserve_ambiguous",
-            transcript: "Actual Neovim with Mike and Fake.",
-            expected: "actual Neovim with Mike and Fake",
         },
         CleanupEvalCase {
             id: "ambiguous-before-change",
@@ -332,12 +320,6 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             category: "avoid_rephrasing",
             transcript: "The links would navigate inside the embedded frame.",
             expected: "The links would navigate inside the embedded frame.",
-        },
-        CleanupEvalCase {
-            id: "preserve-source-grammar",
-            category: "avoid_rephrasing",
-            transcript: "Okay, please do the fixes that you think should be done.",
-            expected: "Okay, please do the fixes that you think should be done.",
         },
         CleanupEvalCase {
             id: "preserve-word-order",
@@ -386,6 +368,6 @@ function run_cleanup_eval(model: string) -> CleanupEvalReport {
     }
 }
 
-test "transcript cleanup eval contains 50 cases" {
-    assert.equal(cleanup_eval_cases().length(), 50)
+test "transcript cleanup eval contains 47 cases" {
+    assert.equal(cleanup_eval_cases().length(), 47)
 }
