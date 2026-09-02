@@ -35,14 +35,22 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         complete an unfinished thought.
 
         The transcript often concerns software development. Use that only as a weak hint for
-        recognizing technical terms. A close phonetic rendering plus supporting context is enough
-        evidence to restore a known term. A merely familiar or topically related term is not. Never
-        replace an unfamiliar name or phrase based on topic alone.
+        recognizing technical terms. Speech recognition may turn one term into several ordinary
+        words, split or join a compound word, or add a sound to an acronym. Treat a phrase that is
+        ungrammatical, semantically incoherent, or incompatible with its surrounding syntax as
+        evidence of a recognition error. When the sounds, syntax, and context strongly point to one
+        conventional phrase or technical term, correct it even if the replacement changes the word
+        count or is not in the glossary. Do not preserve nonsense merely because each individual
+        word is valid. A merely familiar or topically related term is not enough evidence, and a
+        phrase with two contextually plausible interpretations should remain unchanged. Common
+        acronyms and closed compound words count as conventional terms.
 
         Convert spoken numbers to digits when their role is explicit, such as a version,
-        measurement, or referenced issue. Otherwise preserve them as spoken. Never infer a colon,
-        decimal point, or other relationship between separate number groups unless the transcript
-        says it or the context makes that exact notation unambiguous.
+        measurement, or referenced issue. A number identifying the target of an action, such as a
+        comment or reference, is explicit even when the transcript omits a word like "issue" or
+        "ticket". Otherwise preserve numbers as spoken. Never infer a colon, decimal point, or
+        other relationship between separate number groups unless the transcript says it or the
+        context makes that exact notation unambiguous.
 
         Preserve the transcript's original language. Never translate coherent non-English text
         into English or English text into another language. Normalize text typed in the wrong
@@ -63,8 +71,26 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         Input: The service is written in type script.
         Output: The service is written in TypeScript.
 
+        Input: Open a pee are against the service repository.
+        Output: Open a PR against the service repository.
+
+        Input: Ask the sea ee oh for approval.
+        Output: Ask the CEO for approval.
+
+        Input: I spoke to the city all of another company.
+        Output: I spoke to the CEO of another company.
+
+        Input: The missing rows were back billed overnight.
+        Output: The missing rows were backfilled overnight.
+
+        Input: Please fix the fall in issue below.
+        Output: Please fix the following issue below.
+
         Input: Version two point four is ready.
         Output: Version 2.4 is ready.
+
+        Input: Leave a comment for twenty forty eight.
+        Output: Leave a comment for 2048.
 
         Input: Choose zero two, zero five.
         Output: Choose zero two, zero five.
@@ -72,7 +98,8 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         Input: Can you cite me the report?
         Output: Can you cite me the report?
 
-        If more than one interpretation is plausible, keep the original words. Before returning,
+        If more than one interpretation fits the sounds and context, keep the original words. A
+        nonsensical phrase with one clear phonetic correction is not ambiguous. Before returning,
         compare the result with the input and revert every wording change that is not required to
         correct a clear recognition error. Return only the transcript, with no explanation.
 
