@@ -91,5 +91,5 @@ jobs:
 
       - name: Check shell scripts
         run: |
-          shellcheck install.sh integrations/sway/local-wisper.sh scripts/baml
-          bash -n install.sh integrations/sway/local-wisper.sh scripts/baml
+          shellcheck install.sh integrations/sway/local-wisper.sh scripts/baml scripts/run-cleanup-eval-codex
+          bash -n install.sh integrations/sway/local-wisper.sh scripts/baml scripts/run-cleanup-eval-codex
