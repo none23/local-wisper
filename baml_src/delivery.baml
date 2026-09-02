@@ -40,6 +40,23 @@ function wtype_chunks(transcript: string) -> string[] {
 }
 
 function type_text(transcript: string) -> bool {
+    // Keep a virtual keyboard registered so Chromium preserves editor focus as chunk keyboards exit.
+    let anchor_options = process_options(null);
+    anchor_options.keep_stdin_open = true;
+    let anchor = baml.sys.start_process("wtype", ["-"], anchor_options) catch_all (error) {
+        _ => {
+            return false;
+        },
+    };
+    defer {
+        anchor.close()
+    }
+    // Give the anchor time to register before starting the first chunk.
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(20)) catch_all (error) {
+        _ => {
+            return false;
+        },
+    };
     for (let chunk in wtype_chunks(transcript)) {
         if (!run_delivery_command("wtype", ["-"], chunk)) {
             return false;
