@@ -93,8 +93,9 @@ run_case() {
             category: $item[0].category,
             transcript: $item[0].transcript,
             expected: $item[0].expected,
+            accepted: $item[0].accepted,
             actual: $response[0].text,
-            passed: ($response[0].text == $item[0].expected)
+            passed: ($item[0].accepted | index($response[0].text) != null)
         }' >"$result_path"
     echo "finished $id" >&2
 }
