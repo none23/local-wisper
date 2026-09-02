@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "usage: $0 --output PATH [--case ID ...]" >&2
+    exit 2
+}
+
+output_path=""
+case_ids=()
+
+while (($# > 0)); do
+    case "$1" in
+        --output)
+            (($# >= 2)) || usage
+            output_path=$2
+            shift 2
+            ;;
+        --case)
+            (($# >= 2)) || usage
+            case_ids+=("$2")
+            shift 2
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+[[ -n "$output_path" ]] || usage
+[[ ! -e "$output_path" ]] || {
+    echo "refusing to overwrite $output_path" >&2
+    exit 1
+}
+
+repo_root=$(git rev-parse --show-toplevel)
+schema_path="$repo_root/scripts/transcript-cleanup-output.schema.json"
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+
+# Codex supports either ChatGPT or API-key authentication. This eval must use the subscription.
+unset OPENAI_API_KEY
+if [[ $(codex login status 2>&1) != *"Logged in using ChatGPT"* ]]; then
+    echo "Codex must be logged in with ChatGPT subscription authentication" >&2
+    exit 1
+fi
+
+env -u OPENAI_API_KEY baml run --output-format json \
+    -e 'render_codex_cleanup_eval_cases()' >"$tmp_dir/cases.json"
+
+if ((${#case_ids[@]} == 0)); then
+    mapfile -t case_ids < <(jq -r '.[].id' "$tmp_dir/cases.json")
+fi
+
+run_case() {
+    local index=$1
+    local id=$2
+    local case_path="$tmp_dir/case-$index.json"
+    local response_path="$tmp_dir/response-$index.json"
+    local log_path="$tmp_dir/codex-$index.log"
+    local result_path="$tmp_dir/result-$index.json"
+
+    if ! jq -e -c --arg id "$id" '.[] | select(.id == $id)' \
+        "$tmp_dir/cases.json" >"$case_path"; then
+        echo "unknown eval case: $id" >&2
+        return 1
+    fi
+
+    if ! jq -r '.prompt' "$case_path" | env -u OPENAI_API_KEY codex exec \
+        --ignore-user-config \
+        --ignore-rules \
+        --ephemeral \
+        --sandbox read-only \
+        --model gpt-5.6-luna \
+        -c 'model_reasoning_effort="low"' \
+        --output-schema "$schema_path" \
+        --output-last-message "$response_path" \
+        --color never \
+        -C "$repo_root" \
+        - >"$log_path" 2>&1; then
+        echo "Codex failed for case: $id" >&2
+        return 1
+    fi
+
+    jq -e '.text | type == "string"' "$response_path" >/dev/null
+    jq -n \
+        --argjson index "$index" \
+        --slurpfile item "$case_path" \
+        --slurpfile response "$response_path" \
+        '{
+            index: $index,
+            id: $item[0].id,
+            category: $item[0].category,
+            transcript: $item[0].transcript,
+            expected: $item[0].expected,
+            accepted: $item[0].accepted,
+            actual: $response[0].text,
+            passed: ($item[0].accepted | index($response[0].text) != null)
+        }' >"$result_path"
+    echo "finished $id" >&2
+}
+
+failed=0
+for index in "${!case_ids[@]}"; do
+    if ! run_case "$index" "${case_ids[$index]}"; then
+        failed=1
+        break
+    fi
+done
+
+((failed == 0)) || exit 1
+
+mkdir -p "$(dirname "$output_path")"
+jq -s \
+    --arg recorded_at "$(date --iso-8601=seconds)" \
+    --arg commit "$(git rev-parse HEAD)" \
+    --arg codex_version "$(codex --version)" \
+    '
+        sort_by(.index) | map(del(.index)) as $results |
+        {
+            recorded_at: $recorded_at,
+            commit: $commit,
+            runner: "codex exec",
+            codex_version: $codex_version,
+            authentication: "ChatGPT subscription",
+            model: "gpt-5.6-luna",
+            reasoning_effort: "low",
+            passed: ($results | map(select(.passed)) | length),
+            total: ($results | length),
+            results: $results
+        }
+    ' "$tmp_dir"/result-*.json >"$output_path"
+
+jq -r --arg path "$output_path" '"passed \(.passed)/\(.total); results: " + $path' \
+    "$output_path"
