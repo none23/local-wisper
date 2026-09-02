@@ -71,6 +71,9 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         Input: The service is written in type script.
         Output: The service is written in TypeScript.
 
+        Input: Clear the cash before retrying.
+        Output: Clear the cache before retrying.
+
         Input: Open a pee are against the service repository.
         Output: Open a PR against the service repository.
 
@@ -83,8 +86,8 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         Input: The missing rows were back billed overnight.
         Output: The missing rows were backfilled overnight.
 
-        Input: Please fix the fall in issue below.
-        Output: Please fix the following issue below.
+        Input: Please review the fallen Asia below.
+        Output: Please review the following issue below.
 
         Input: Version two point four is ready.
         Output: Version 2.4 is ready.
