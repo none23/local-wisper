@@ -175,7 +175,7 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             id: "fragment-unfinished",
             category: "preserve_fragment",
             transcript: "My observation is that mobile changes are typically merged by",
-            expected: "My observation is that mobile changes are typically merged by",
+            expected: "my observation is that mobile changes are typically merged by",
         },
         CleanupEvalCase {
             id: "term-typescript",
@@ -301,7 +301,7 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             id: "ambiguous-names",
             category: "preserve_ambiguous",
             transcript: "Actual Neovim with Mike and Fake.",
-            expected: "Actual Neovim with Mike and Fake.",
+            expected: "actual Neovim with Mike and Fake",
         },
         CleanupEvalCase {
             id: "ambiguous-before-change",
