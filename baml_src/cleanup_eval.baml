@@ -435,7 +435,7 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             id: "ambiguous-unintelligible",
             category: "correct_recognition",
             transcript: "We've noticed the fallen Asia in auto naming.",
-            expected: "We've noticed the following issue in auto-naming.",
+            expected: "We've noticed the following issue in auto naming.",
         },
         CleanupEvalCase {
             id: "ambiguous-before-change",
