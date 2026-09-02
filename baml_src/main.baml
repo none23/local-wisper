@@ -92,6 +92,9 @@ function CleanTranscript(transcript: string, glossary: string, model: string) ->
         Input: Version two point four is ready.
         Output: Version 2.4 is ready.
 
+        Input: Set the width to two point five pixels.
+        Output: Set the width to 2.5 pixels.
+
         Input: Leave a comment for twenty forty eight.
         Output: Leave a comment for 2048.
 
