@@ -447,7 +447,7 @@ function cleanup_eval_cases() -> CleanupEvalCase[] {
             id: "number-version",
             category: "correct_unambiguous_number",
             transcript: "Was version five point three released before version five point three flash?",
-            expected: "Was version 5.3 released before version 5.3 Flash?",
+            expected: "Was version 5.3 released before version 5.3 flash?",
         },
         CleanupEvalCase {
             id: "number-measurement",
