@@ -84,8 +84,8 @@ function parse_options(args: string[]) -> AppOptions {
             },
             "--model" => {
                 let value = required_value(args, index + 1, arg);
-                if (value != "nvidia/parakeet-tdt-0.6b-v3") {
-                    invalid_argument("only --model nvidia/parakeet-tdt-0.6b-v3 is supported")
+                if (value != "nvidia/parakeet-unified-en-0.6b") {
+                    invalid_argument("only --model nvidia/parakeet-unified-en-0.6b is supported")
                 }
                 index += 2
             },
@@ -340,6 +340,13 @@ test "BAML parses the unchanged Sway invocation" {
 
 test "bare arguments select interactive recording" {
     assert.equal(parse_options([]).command, AppCommand.Record)
+}
+
+test "CLI accepts the Parakeet Unified model name" {
+    assert.equal(
+        parse_options(["--model", "nvidia/parakeet-unified-en-0.6b"]).command,
+        AppCommand.Record,
+    )
 }
 
 test "post-processing model is user configurable" {

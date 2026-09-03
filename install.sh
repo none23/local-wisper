@@ -148,4 +148,4 @@ echo "Caching the BAML runtime..."
 "${lw_target}" sway-cancel
 
 echo "Installed ${lw_target}"
-echo "Run 'lw preload' to select the best available runtime and load Parakeet."
+echo "Run 'lw preload' to select the best available runtime and load Parakeet Unified."

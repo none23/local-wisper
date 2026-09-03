@@ -4,9 +4,9 @@
 
 # Local Wisper
 
-Local speech-to-text for Linux, built around Sway. Press a shortcut, speak, and
-the transcript appears in the focused window without sending your audio to the
-cloud.
+English speech-to-text for Linux, built around Sway and NVIDIA's
+Parakeet Unified EN 0.6B model. Press a shortcut, speak, and the transcript
+appears in the focused window without sending your audio to the cloud.
 
 ## Requirements
 
