@@ -5,12 +5,12 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use fs2::FileExt;
-use parakeet_rs::{ExecutionConfig, ParakeetTDT, TimestampMode, Transcriber};
+use parakeet_rs::{ExecutionConfig, ParakeetUnified, TimestampMode, Transcriber};
 
 use crate::{paths, runtime};
 
 struct Model {
-    inner: ParakeetTDT,
+    inner: ParakeetUnified,
 }
 
 #[derive(Default)]
@@ -49,7 +49,7 @@ impl ModelHost {
             .map_err(|_| anyhow::anyhow!("model lock holder was poisoned"))?
             .is_none()
         {
-            bail!("refusing to load Parakeet without the per-user model lock")
+            bail!("refusing to load Parakeet Unified without the per-user model lock")
         }
         let mut slot = self
             .model
@@ -59,22 +59,21 @@ impl ModelHost {
             bail!("the resident model is already loaded")
         }
         let (variant_name, device, config) = match variant {
-            baml_sdk::ModelVariant::Fp16 => {
+            baml_sdk::ModelVariant::Fp32 => {
                 runtime::prepare_cuda()?;
-                ("FP16", "CUDA", strict_cuda_config())
+                ("FP32", "CUDA", strict_cuda_config())
             }
             baml_sdk::ModelVariant::Int8 => ("INT8", "CPU", ExecutionConfig::new()),
         };
         let started = Instant::now();
-        let inner = ParakeetTDT::from_pretrained(Path::new(&model_dir), Some(config)).with_context(
-            || {
+        let inner = ParakeetUnified::from_pretrained(Path::new(&model_dir), Some(config))
+            .with_context(|| {
                 format!(
-                    "failed to load Parakeet {variant_name} with the {device} execution provider from {model_dir}"
+                    "failed to load Parakeet Unified {variant_name} with the {device} execution provider from {model_dir}"
                 )
-            },
-        )?;
+            })?;
         eprintln!(
-            "Parakeet {variant_name} loaded on {device} in {:.2?}",
+            "Parakeet Unified {variant_name} loaded on {device} in {:.2?}",
             started.elapsed()
         );
         *slot = Some(Model { inner });
@@ -88,10 +87,12 @@ impl ModelHost {
             .map_err(|_| anyhow::anyhow!("model holder was poisoned"))?;
         let model = slot.as_mut().context("resident model is not loaded")?;
         let started = Instant::now();
-        let result = model
-            .inner
-            .transcribe_file(Path::new(&audio_path), Some(TimestampMode::Sentences))
-            .with_context(|| format!("failed to transcribe {audio_path}"))?;
+        let result = Transcriber::transcribe_file(
+            &mut model.inner,
+            Path::new(&audio_path),
+            Some(TimestampMode::Sentences),
+        )
+        .with_context(|| format!("failed to transcribe {audio_path}"))?;
         eprintln!("transcribed {audio_path} in {:.2?}", started.elapsed());
         Ok(result.text.trim().to_owned())
     }
