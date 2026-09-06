@@ -86,3 +86,21 @@ The database is stored at `$XDG_DATA_HOME/local-wisper/transcripts.sqlite3`, or
 `~/.local/share/local-wisper/transcripts.sqlite3` when `XDG_DATA_HOME` is unset.
 Local Wisper restricts the directory to the current user, but the database
 contents are not encrypted.
+
+## Error logs
+
+The Sway wrapper appends errors and warnings to
+`$XDG_STATE_HOME/local-wisper/sway.log`, defaulting to
+`~/.local/state/local-wisper/sway.log`. It records the command, timestamp, and
+nonzero exit status. This includes transcription failures, cleanup warnings,
+and clipboard or typing failures. Transcript stdout is not added to this log.
+Reinstall the wrapper after updating to enable logging.
+
+```bash
+tail -n 100 ~/.local/state/local-wisper/sway.log
+```
+
+The model daemon also writes to `$XDG_CACHE_HOME/local-wisper/daemon.log`,
+defaulting to `~/.cache/local-wisper/daemon.log`.
+Direct CLI invocations print errors to stderr. Logs remain on this device and
+are not automatically rotated.
